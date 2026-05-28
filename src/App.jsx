@@ -45,9 +45,9 @@ const ADJECTIVE_PAIRS = _RAW_PAIRS.map(([a, b]) => [btoa(unescape(encodeURICompo
 const decodeWord = (b64) => { try { return decodeURIComponent(escape(atob(b64))); } catch { return b64; } };
 
 const DIFFICULTY = {
-  "fácil":   { pairs: 6,  label: "Fácil",   cols: 4 },
-  "médio":   { pairs: 10, label: "Médio",   cols: 5 },
-  "difícil": { pairs: 16, label: "Difícil", cols: 6 },
+  "fácil":   { pairs: 7,  label: "Fácil",   cols: 4 },
+  "médio":   { pairs: 11, label: "Médio",   cols: 5 },
+  "difícil": { pairs: 17, label: "Difícil", cols: 6 },
 };
 
 const PLAYER_COLORS = ["#a78bfa","#34d399","#f87171","#fbbf24","#60a5fa","#f472b6"];
