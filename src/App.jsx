@@ -376,7 +376,8 @@ function LandingPage({ onCreateRoom, onJoinRoom, onTutorial }) {
 
       <div style={{ textAlign:"center", padding:"20px", color:"#3d3560", fontSize:12, fontFamily:"'DM Sans',sans-serif" }}>
         Opostos Perfeitos — Jogo da Memória de Adjetivos
-          ⚡Criado pela Tropa do Gabigol⚡ 
+          <br><br>
+            ⚡Criado pela Tropa do Gabigol⚡ 
       </div>
     </div>
   );
