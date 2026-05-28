@@ -375,7 +375,8 @@ function LandingPage({ onCreateRoom, onJoinRoom, onTutorial }) {
       </div>
 
       <div style={{ textAlign:"center", padding:"20px", color:"#3d3560", fontSize:12, fontFamily:"'DM Sans',sans-serif" }}>
-        Opostos Perfeitos — Jogo da Memória de Adjetivos
+        Opostos Perfeitos — Jogo da Memória de Adjetivos<br></br>
+        ⚡Criado pela Tropa do Gabigol⚡ 
       </div>
     </div>
   );
@@ -657,19 +658,74 @@ function VictoryScreen({ room, myId, onRestart, onHome }) {
   const podiumLabels  = isTie ? ["=","=","3º"] : ["2º","1º","3º"];
 
   return (
-    <div style={{ minHeight:"100vh", background:"#07080f", color:"#e8e4f8", fontFamily:"'DM Sans',sans-serif", display:"flex", flexDirection:"column", alignItems:"center", padding:"40px 24px", overflow:"hidden" }}>
+    <div style={{ minHeight:"100vh", background: isTie ? "#07090e" : "#08060f", color:"#e8e4f8", fontFamily:"'DM Sans',sans-serif", display:"flex", flexDirection:"column", alignItems:"center", padding:"40px 24px", overflow:"hidden", position:"relative" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Abril+Fatface&family=DM+Sans:wght@300;400;500&display=swap');
+
+        /* ── fundo vitória: raios de luz dourada ── */
+        .bg-win::before {
+          content:'';
+          position:fixed; inset:0; z-index:0; pointer-events:none;
+          background:
+            radial-gradient(ellipse 80% 60% at 50% 0%,   #7c3aed44 0%, transparent 65%),
+            radial-gradient(ellipse 60% 40% at 20% 100%, #c0850022 0%, transparent 60%),
+            radial-gradient(ellipse 50% 35% at 80% 90%,  #ffd70018 0%, transparent 55%);
+        }
+        .bg-win::after {
+          content:'';
+          position:fixed; inset:0; z-index:0; pointer-events:none;
+          background: repeating-conic-gradient(from 0deg at 50% -10%, #ffd70006 0deg 10deg, transparent 10deg 30deg);
+          animation: rotateBg 30s linear infinite;
+        }
+        @keyframes rotateBg { to { transform: rotate(360deg); } }
+
+        /* ── fundo empate: névoa fria e estática ── */
+        .bg-tie::before {
+          content:'';
+          position:fixed; inset:0; z-index:0; pointer-events:none;
+          background:
+            radial-gradient(ellipse 70% 50% at 30% 20%, #0d2a3a33 0%, transparent 60%),
+            radial-gradient(ellipse 60% 45% at 75% 80%, #0a1e2a22 0%, transparent 55%);
+        }
+
+        /* ── confete (só vitória) ── */
+        @keyframes confettiFall { 0%{transform:translateY(-80px) rotate(0deg);opacity:1} 100%{transform:translateY(105vh) rotate(540deg);opacity:0} }
+        .confetti-piece { position:fixed; width:9px; height:9px; pointer-events:none; animation:confettiFall linear infinite; z-index:1; }
+
+        /* ── pódio ── */
         @keyframes podiumRise { from{transform:scaleY(0);transform-origin:bottom} to{transform:scaleY(1)} }
         .podium-block { animation:podiumRise .6s ease-out; animation-fill-mode:both; }
+
+        /* ── empate ── */
         @keyframes tieFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
         .tie-icon { animation:tieFloat 2.4s ease-in-out infinite; display:inline-block; }
+
+        /* ── shared ── */
         .action-btn { padding:14px 32px; border-radius:12px; font-size:16px; cursor:pointer; font-family:'DM Sans',sans-serif; font-weight:500; transition:all .15s; }
-        .rank-row { background:#0f1018; border:1px solid #1e2030; border-radius:10px; padding:10px 16px; display:flex; align-items:center; gap:12px; }
-        .rank-row.me { border-color:#4a4080; background:#13112a; }
+        .rank-row { background:#0f1018; border:1px solid #1e2030; border-radius:10px; padding:10px 16px; display:flex; align-items:center; gap:12px; position:relative; z-index:2; }
+        .rank-row.me   { border-color:#4a4080; background:#13112a; }
         .rank-row.tied { border-color:#3a4a5a; background:#0d1220; }
-        .tie-banner { background:linear-gradient(135deg,#0f1a2e,#162030); border:1px solid #2a3a4a; border-radius:16px; padding:20px 32px; text-align:center; }
+        .tie-banner { background:linear-gradient(135deg,#0a1520,#101c28); border:1px solid #1e2e3a; border-radius:16px; padding:20px 32px; text-align:center; position:relative; z-index:2; }
+        .end-content { position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; width:100%; }
       `}</style>
+
+      {/* camada de fundo condicional */}
+      <div className={isTie ? "bg-tie" : "bg-win"} style={{ position:"fixed", inset:0, zIndex:0 }} />
+
+      {/* confete apenas na vitória */}
+      {!isTie && Array.from({length:22}).map((_,i) => (
+        <div key={i} className="confetti-piece" style={{
+          left:`${Math.random()*100}%`,
+          background:["#a78bfa","#ffd700","#f87171","#fbbf24","#60a5fa","#f472b6","#34d399"][i%7],
+          animationDuration:`${2.2+Math.random()*3}s`,
+          animationDelay:`${Math.random()*2.5}s`,
+          borderRadius: Math.random()>0.5?"50%":"2px",
+          width: Math.random()>0.5 ? "8px" : "12px",
+          height: Math.random()>0.5 ? "8px" : "5px",
+        }}/>
+      ))}
+
+      <div className="end-content">
 
       {/* ── Cabeçalho ── */}
       <div style={{ textAlign:"center", marginBottom:36 }}>
@@ -747,9 +803,10 @@ function VictoryScreen({ room, myId, onRestart, onHome }) {
 
       {/* ── Ações ── */}
       <div style={{ display:"flex", gap:12, flexWrap:"wrap", justifyContent:"center" }}>
-        <button className="action-btn" onClick={onRestart} style={{ background:"#1a1830", border:"1px solid #2a2650", color:"#8a80b8" }}>🔄 Jogar Novamente</button>
-        <button className="action-btn" onClick={onHome}    style={{ background:"transparent", border:"1px solid #1e2030", color:"#4a4870" }}>🏠 Página Inicial</button>
+        <button className="action-btn" onClick={onRestart} style={{ background: isTie ? "#111a22" : "#1a1430", border: isTie ? "1px solid #1e2e3a" : "1px solid #3a2860", color: isTie ? "#5a7888" : "#9a80c8" }}>🔄 Jogar Novamente</button>
+        <button className="action-btn" onClick={onHome}    style={{ background:"transparent", border: isTie ? "1px solid #1a2530" : "1px solid #2a2040", color: isTie ? "#3a5060" : "#6a5890" }}>🏠 Página Inicial</button>
       </div>
+      </div>{/* end-content */}
     </div>
   );
 }
