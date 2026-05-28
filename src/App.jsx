@@ -375,8 +375,7 @@ function LandingPage({ onCreateRoom, onJoinRoom, onTutorial }) {
       </div>
 
       <div style={{ textAlign:"center", padding:"20px", color:"#3d3560", fontSize:12, fontFamily:"'DM Sans',sans-serif" }}>
-        Opostos Perfeitos — Jogo da Memória de Adjetivos<br></br>
-        ⚡Criado pela Tropa do Gabigol⚡ 
+        Opostos Perfeitos — Jogo da Memória de Adjetivos
       </div>
     </div>
   );
@@ -396,10 +395,25 @@ function Lobby({ roomId, isHost, onGameStart, onBack }) {
   const { send, connected } = useWebSocket((msg) => {
     if (msg.type === "ROOM_STATE" && msg.payload) {
       setRoom(msg.payload);
-      if (msg.payload.gameStarted) onGameStart(msg.payload, myId);
+      // Só redireciona para o jogo se o jogador já entrou na sala (nameSet)
+      // Isso evita redirect imediato ao voltar para o lobby após "Jogar Novamente"
+      if (msg.payload.gameStarted && nameSet) onGameStart(msg.payload, myId);
     }
     if (msg.type === "ERROR") setError(msg.payload);
   });
+
+  // Ao montar o Lobby vindo de "Jogar Novamente", reseta o estado da sala no servidor
+  const resetDoneRef = useRef(false);
+  useEffect(() => {
+    if (!resetDoneRef.current) {
+      resetDoneRef.current = true;
+      // Pequeno delay para garantir que a conexão WS está aberta
+      const t = setTimeout(() => {
+        send("RESET_ROOM", { roomId });
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const joinRoom = () => {
     const name = playerName.trim();
@@ -550,9 +564,23 @@ function GameBoard({ roomId, myId, onGameOver }) {
   );
 
   const cfg = DIFFICULTY[room.difficulty] || DIFFICULTY["médio"];
-  // Responsivo: cols dinâmico por largura de tela
   const totalCards = room.deck.length;
-  const cols = cfg.cols;
+
+  // Calcula o grid mais equilibrado e bonito para o número de cartas
+  // Objetivo: linhas e colunas o mais próximas possível, priorizando mais colunas que linhas
+  const getBestGrid = (n) => {
+    const options = [];
+    for (let c = 2; c <= Math.min(n, 8); c++) {
+      const r = Math.ceil(n / c);
+      const leftover = r * c - n; // cartas "vazias" na última linha
+      options.push({ cols: c, rows: r, leftover, ratio: Math.abs(c / r - 1.4) });
+    }
+    // Ordena: menos sobras, depois ratio mais próximo de 1.4 (paisagem leve)
+    options.sort((a, b) => a.leftover - b.leftover || a.ratio - b.ratio);
+    return options[0]?.cols || 4;
+  };
+  const cols = getBestGrid(totalCards);
+  const maxBoardWidth = cols <= 4 ? 520 : cols <= 5 ? 660 : cols <= 6 ? 780 : cols <= 7 ? 900 : 1020;
 
   return (
     <div style={{ minHeight:"100vh", background:"#0a0a14", color:"#f0eefc", fontFamily:"'DM Sans',sans-serif", padding:"16px", boxSizing:"border-box" }}>
@@ -610,7 +638,7 @@ function GameBoard({ roomId, myId, onGameOver }) {
       {/* Tabuleiro responsivo */}
       <div className="board-grid" style={{
         gridTemplateColumns: `repeat(${cols}, 1fr)`,
-        maxWidth: cols <= 4 ? 560 : cols === 5 ? 680 : 820,
+        maxWidth: maxBoardWidth,
         margin:"0 auto",
         width:"100%",
       }}>
