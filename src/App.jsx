@@ -45,9 +45,9 @@ const ADJECTIVE_PAIRS = _RAW_PAIRS.map(([a, b]) => [btoa(unescape(encodeURICompo
 const decodeWord = (b64) => { try { return decodeURIComponent(escape(atob(b64))); } catch { return b64; } };
 
 const DIFFICULTY = {
-  "fácil":   { pairs: 7,  label: "Fácil",   cols: 4 },
-  "médio":   { pairs: 11, label: "Médio",   cols: 5 },
-  "difícil": { pairs: 17, label: "Difícil", cols: 6 },
+  "fácil":   { pairs: 7,  label: "Fácil",   cols: 4 },  // 14 cartas → 7 pares
+  "médio":   { pairs: 11, label: "Médio",   cols: 5 },  // 22 cartas → 11 pares
+  "difícil": { pairs: 17, label: "Difícil", cols: 6 },  // 34 cartas → 17 pares
 };
 
 const PLAYER_COLORS = ["#a78bfa","#34d399","#f87171","#fbbf24","#60a5fa","#f472b6"];
@@ -276,7 +276,7 @@ function LandingPage({ onCreateRoom, onJoinRoom, onTutorial }) {
   const features = [
     { icon:"🧠", title:"Adjetivos Opostos", desc:"Encontre pares de palavras com significados contrários para marcar pontos." },
     { icon:"👥", title:"Multiplayer Global",  desc:"Jogue com 2 a 6 amigos em tempo real via WebSocket, de qualquer lugar do mundo." },
-    { icon:"🎯", title:"3 Dificuldades",      desc:"Escolha entre Fácil (12 cartas), Médio (20 cartas) e Difícil (32 cartas)." },
+    { icon:"🎯", title:"3 Dificuldades",      desc:"Escolha entre Fácil (14 cartas / 7 pares), Médio (22 cartas / 11 pares) e Difícil (34 cartas / 17 pares)." },
     { icon:"🏆", title:"Pódio & Ranking",     desc:"Ao final do jogo veja o pódio animado com os melhores jogadores da partida." },
     { icon:"📚", title:"100 Pares Únicos",    desc:"Mais de 100 pares de adjetivos sorteados aleatoriamente a cada partida, garantindo variedade sempre." },
     { icon:"🎓", title:"Tutorial Interativo", desc:"Nunca jogou? Aprenda as regras jogando um mini tutorial com dicas passo a passo antes de entrar em uma sala." },
@@ -375,8 +375,7 @@ function LandingPage({ onCreateRoom, onJoinRoom, onTutorial }) {
       </div>
 
       <div style={{ textAlign:"center", padding:"20px", color:"#3d3560", fontSize:12, fontFamily:"'DM Sans',sans-serif" }}>
-        Opostos Perfeitos — Jogo da Memória de Adjetivos<br></br>
-        ⚡Criado pela Tropa do Gabigol⚡ 
+        Opostos Perfeitos — Jogo da Memória de Adjetivos
       </div>
     </div>
   );
@@ -646,79 +645,110 @@ function GameBoard({ roomId, myId, onGameOver }) {
 // ─── VICTORY SCREEN ───────────────────────────────────────────────────────────
 function VictoryScreen({ room, myId, onRestart, onHome }) {
   const sorted = [...(room?.players||[])].sort((a,b) => b.score - a.score);
-  const podiumHeights = [120,160,90];
-  const podiumColors  = ["#c0c0c0","#ffd700","#cd7f32"];
-  const podiumLabels  = ["2º","1º","3º"];
+  const topScore = sorted[0]?.score ?? 0;
+  const tiedPlayers = sorted.filter(p => p.score === topScore);
+  const isTie = tiedPlayers.length >= 2;
   const myRank = sorted.findIndex(p => p.id === myId) + 1;
+  const iAmTied = isTie && tiedPlayers.some(p => p.id === myId);
+
+  // Pódio: empate mostra os empatados lado a lado no topo, sem cor de ouro
+  const podiumHeights = [110, 150, 80];
+  const podiumColors  = isTie ? ["#6c7a8a","#8a9bb0","#4a5568"] : ["#c0c0c0","#ffd700","#cd7f32"];
+  const podiumLabels  = isTie ? ["=","=","3º"] : ["2º","1º","3º"];
 
   return (
-    <div style={{ minHeight:"100vh", background:"#0a0a14", color:"#f0eefc", fontFamily:"'DM Sans',sans-serif", display:"flex", flexDirection:"column", alignItems:"center", padding:"40px 24px", overflow:"hidden" }}>
+    <div style={{ minHeight:"100vh", background:"#07080f", color:"#e8e4f8", fontFamily:"'DM Sans',sans-serif", display:"flex", flexDirection:"column", alignItems:"center", padding:"40px 24px", overflow:"hidden" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Abril+Fatface&family=DM+Sans:wght@300;400;500&display=swap');
-        @keyframes confettiFall { 0%{transform:translateY(-100px) rotate(0deg);opacity:1} 100%{transform:translateY(110vh) rotate(720deg);opacity:0} }
-        .confetti-piece { position:fixed; width:10px; height:10px; pointer-events:none; animation:confettiFall linear infinite; }
         @keyframes podiumRise { from{transform:scaleY(0);transform-origin:bottom} to{transform:scaleY(1)} }
         .podium-block { animation:podiumRise .6s ease-out; animation-fill-mode:both; }
+        @keyframes tieFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+        .tie-icon { animation:tieFloat 2.4s ease-in-out infinite; display:inline-block; }
         .action-btn { padding:14px 32px; border-radius:12px; font-size:16px; cursor:pointer; font-family:'DM Sans',sans-serif; font-weight:500; transition:all .15s; }
-        .rank-row { background:#13112a; border:1px solid #2a2460; border-radius:10px; padding:10px 16px; display:flex; align-items:center; gap:12px; }
-        .rank-row.me { border-color:#6c47ff; background:#1e1a3f; }
+        .rank-row { background:#0f1018; border:1px solid #1e2030; border-radius:10px; padding:10px 16px; display:flex; align-items:center; gap:12px; }
+        .rank-row.me { border-color:#4a4080; background:#13112a; }
+        .rank-row.tied { border-color:#3a4a5a; background:#0d1220; }
+        .tie-banner { background:linear-gradient(135deg,#0f1a2e,#162030); border:1px solid #2a3a4a; border-radius:16px; padding:20px 32px; text-align:center; }
       `}</style>
 
-      {Array.from({length:20}).map((_,i) => (
-        <div key={i} className="confetti-piece" style={{
-          left:`${Math.random()*100}%`,
-          background:["#a78bfa","#34d399","#f87171","#fbbf24","#60a5fa","#f472b6"][i%6],
-          animationDuration:`${2+Math.random()*3}s`,
-          animationDelay:`${Math.random()*2}s`,
-          borderRadius: Math.random()>0.5?"50%":"0",
-        }}/>
-      ))}
+      {/* ── Cabeçalho ── */}
+      <div style={{ textAlign:"center", marginBottom:36 }}>
+        <div style={{ fontSize:12, letterSpacing:4, color:"#4a5070", textTransform:"uppercase", marginBottom:12, fontFamily:"'DM Sans',sans-serif" }}>Fim de Jogo</div>
 
-      <div style={{ textAlign:"center", marginBottom:40 }}>
-        <div style={{ fontFamily:"'Abril Fatface',serif", fontSize:14, letterSpacing:4, color:"#9f6cff", textTransform:"uppercase", marginBottom:8 }}>Fim de Jogo!</div>
-        <h1 style={{ fontFamily:"'Abril Fatface',serif", fontSize:"clamp(40px,8vw,72px)", margin:0, background:"linear-gradient(135deg,#ffd700,#fff 50%,#ffd700)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>
-          🏆 {sorted[0]?.name} Venceu!
-        </h1>
-        {myRank===1 && <div style={{ fontSize:18, color:"#fbbf24", marginTop:8 }}>Parabéns! Você é o campeão! 👑</div>}
+        {isTie ? (
+          <div className="tie-banner">
+            <div style={{ fontSize:40, marginBottom:8 }}><span className="tie-icon">🤝</span></div>
+            <h1 style={{ fontFamily:"'Abril Fatface',serif", fontSize:"clamp(32px,6vw,56px)", margin:"0 0 10px", color:"#8ab0cc" }}>
+              Empate!
+            </h1>
+            <div style={{ fontSize:15, color:"#4a6070", lineHeight:1.6 }}>
+              {tiedPlayers.map(p => p.name).join(" e ")} terminaram com <strong style={{ color:"#6a8a9a" }}>{topScore} {topScore === 1 ? "par" : "pares"}</strong>
+            </div>
+            {iAmTied && <div style={{ fontSize:14, color:"#5a7a8a", marginTop:8 }}>Você empatou em primeiro lugar.</div>}
+          </div>
+        ) : (
+          <div>
+            <h1 style={{ fontFamily:"'Abril Fatface',serif", fontSize:"clamp(36px,7vw,64px)", margin:0, color:"#c4b5fd" }}>
+              {sorted[0]?.name} Venceu!
+            </h1>
+            {myRank === 1 && <div style={{ fontSize:16, color:"#7a6a9a", marginTop:8 }}>Você venceu esta partida.</div>}
+          </div>
+        )}
       </div>
 
-      <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"center", gap:4, marginBottom:40, width:"100%", maxWidth:400 }}>
-        {[sorted[1],sorted[0],sorted[2]].map((player,vi) => {
+      {/* ── Pódio ── */}
+      <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"center", gap:4, marginBottom:36, width:"100%", maxWidth:420 }}>
+        {[sorted[1], sorted[0], sorted[2]].map((player, vi) => {
           if (!player) return <div key={vi} style={{ flex:1 }}/>;
+          const isTiedSlot = isTie && player.score === topScore;
+          const color = isTiedSlot ? "#6c7a8a" : podiumColors[vi];
+          const label = isTiedSlot ? "=" : podiumLabels[vi];
           return (
             <div key={player.id} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center" }}>
               <div style={{ marginBottom:8, textAlign:"center" }}>
-                {vi===1 && <div style={{ fontSize:28, marginBottom:4 }}>👑</div>}
-                <div style={{ fontSize:14, fontWeight:500, color:"#e0d9f7", wordBreak:"break-word" }}>{player.name}</div>
-                <div style={{ fontSize:22, fontWeight:500, color:podiumColors[vi] }}>{player.score} pts</div>
+                {!isTie && vi===1 && <div style={{ fontSize:24, marginBottom:4, opacity:0.6 }}>🏆</div>}
+                <div style={{ fontSize:13, fontWeight:500, color:"#9a94b8", wordBreak:"break-word" }}>{player.name}</div>
+                <div style={{ fontSize:20, fontWeight:500, color }}>{player.score} pts</div>
               </div>
-              <div className="podium-block" style={{ width:"100%", height:podiumHeights[vi], background:`linear-gradient(180deg,${podiumColors[vi]}55,${podiumColors[vi]}22)`, border:`2px solid ${podiumColors[vi]}`, borderRadius:"8px 8px 0 0", display:"flex", alignItems:"center", justifyContent:"center", animationDelay:`${vi*0.15}s` }}>
-                <span style={{ fontSize:24, fontWeight:700, color:podiumColors[vi], fontFamily:"'Abril Fatface',serif" }}>{podiumLabels[vi]}</span>
+              <div className="podium-block" style={{
+                width:"100%", height:podiumHeights[vi],
+                background:`linear-gradient(180deg,${color}33,${color}11)`,
+                border:`1.5px solid ${color}55`,
+                borderRadius:"8px 8px 0 0",
+                display:"flex", alignItems:"center", justifyContent:"center",
+                animationDelay:`${vi*0.15}s`
+              }}>
+                <span style={{ fontSize:20, fontWeight:700, color:`${color}cc`, fontFamily:"'Abril Fatface',serif" }}>{label}</span>
               </div>
             </div>
           );
         })}
       </div>
 
+      {/* ── Placar Final ── */}
       <div style={{ width:"100%", maxWidth:500, marginBottom:40 }}>
-        <div style={{ fontSize:13, color:"#9f7cff", marginBottom:12, textAlign:"center", letterSpacing:2, textTransform:"uppercase" }}>Placar Final</div>
+        <div style={{ fontSize:12, color:"#3a3860", marginBottom:12, textAlign:"center", letterSpacing:2, textTransform:"uppercase" }}>Placar Final</div>
         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-          {sorted.map((p,i) => (
-            <div key={p.id} className={`rank-row ${p.id===myId?"me":""}`}>
-              <div style={{ width:28, height:28, borderRadius:"50%", background:PLAYER_COLORS[i%PLAYER_COLORS.length]+"33", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:500, color:PLAYER_COLORS[i%PLAYER_COLORS.length], flexShrink:0 }}>
-                {i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}º`}
+          {sorted.map((p,i) => {
+            const isTiedRow = isTie && p.score === topScore;
+            return (
+              <div key={p.id} className={`rank-row ${p.id===myId?"me":""} ${isTiedRow?"tied":""}`}>
+                <div style={{ width:28, height:28, borderRadius:"50%", background:PLAYER_COLORS[i%PLAYER_COLORS.length]+"22", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:500, color:PLAYER_COLORS[i%PLAYER_COLORS.length]+"aa", flexShrink:0 }}>
+                  {isTiedRow ? "=" : i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}º`}
+                </div>
+                <div style={{ flex:1, color:"#b0aac8" }}>{p.name}</div>
+                {p.id===myId && <span style={{ fontSize:11, color:"#3a3860" }}>você</span>}
+                <div style={{ fontSize:18, fontWeight:500, color:PLAYER_COLORS[i%PLAYER_COLORS.length]+"aa" }}>{p.score}</div>
               </div>
-              <div style={{ flex:1 }}>{p.name}</div>
-              {p.id===myId && <span style={{ fontSize:11, color:"#6e618f" }}>você</span>}
-              <div style={{ fontSize:20, fontWeight:500, color:PLAYER_COLORS[i%PLAYER_COLORS.length] }}>{p.score}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
+      {/* ── Ações ── */}
       <div style={{ display:"flex", gap:12, flexWrap:"wrap", justifyContent:"center" }}>
-        <button className="action-btn" onClick={onRestart} style={{ background:"linear-gradient(135deg,#6c47ff,#9f6cff)", border:"none", color:"#fff" }}>🔄 Jogar Novamente</button>
-        <button className="action-btn" onClick={onHome}    style={{ background:"transparent", border:"1.5px solid #6c47ff", color:"#a78bfa" }}>🏠 Página Inicial</button>
+        <button className="action-btn" onClick={onRestart} style={{ background:"#1a1830", border:"1px solid #2a2650", color:"#8a80b8" }}>🔄 Jogar Novamente</button>
+        <button className="action-btn" onClick={onHome}    style={{ background:"transparent", border:"1px solid #1e2030", color:"#4a4870" }}>🏠 Página Inicial</button>
       </div>
     </div>
   );
@@ -749,4 +779,3 @@ export default function App() {
     </>
   );
 }
-
