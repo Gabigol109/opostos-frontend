@@ -393,36 +393,52 @@ function LandingPage({ onCreateRoom, onJoinRoom, onTutorial }) {
 }
 
 // ─── LOBBY ────────────────────────────────────────────────────────────────────
-function Lobby({ roomId, isHost, persistedMyId, onGameStart, onBack }) {
+function Lobby({ roomId, isHost, persistedMyId, persistedName, onNameSet, onGameStart, onBack }) {
   const [room, setRoom] = useState(null);
-  const [playerName, setPlayerName] = useState("");
-  // nameSet começa true se já temos persistedMyId (voltou de uma partida)
-  const [nameSet, setNameSet] = useState(false);
-  const myId = persistedMyId; // usa sempre o mesmo ID, não gera novo
+  const [playerName, setPlayerName] = useState(persistedName || "");
+  // Se já tem nome guardado (voltou de partida), pula tela de nome direto para a sala
+  const [nameSet, setNameSet] = useState(!!persistedName);
+  const myId = persistedMyId;
   const [difficulty, setDifficulty] = useState("médio");
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
-  const nameSetRef = useRef(nameSet);
+  const nameSetRef = useRef(!!persistedName);
   nameSetRef.current = nameSet;
+  // Guarda nome e isHost em refs para usar dentro dos callbacks do WS
+  const playerNameRef = useRef(persistedName || "");
+  playerNameRef.current = playerName;
+  const isHostRef = useRef(isHost);
 
   const { send, connected } = useWebSocket(
     (msg) => {
       if (msg.type === "ROOM_STATE" && msg.payload) {
         setRoom(msg.payload);
-        // Redireciona para o jogo só se o jogador já entrou na sala
         if (msg.payload.gameStarted && nameSetRef.current) onGameStart();
       }
       if (msg.type === "ERROR") setError(msg.payload);
     },
-    // onOpen: quando a conexão abre, envia RESET_ROOM para limpar partida anterior
-    (sendFn) => sendFn("RESET_ROOM", { roomId })
+    (sendFn) => {
+      // Sempre reseta a sala ao abrir conexão
+      sendFn("RESET_ROOM", { roomId });
+      // Se já tem nome (voltou de partida), entra na sala automaticamente
+      if (playerNameRef.current) {
+        sendFn("JOIN_ROOM", {
+          roomId,
+          player: { id: myId, name: playerNameRef.current },
+          isHost: isHostRef.current,
+          difficulty: "médio",
+          maxPlayers: 4,
+        });
+      }
+    }
   );
 
   const joinRoom = () => {
     const name = playerName.trim();
     if (!name) { setError("Digite seu nome"); return; }
+    onNameSet(name); // persiste o nome no App para próximas partidas
     send("JOIN_ROOM", { roomId, player: { id: myId, name }, isHost, difficulty, maxPlayers });
     setNameSet(true);
   };
@@ -456,6 +472,7 @@ function Lobby({ roomId, isHost, persistedMyId, onGameStart, onBack }) {
         .name-input:focus { border-color:#6c47ff; }
         .code-box { background:#0d0c1e; border:1.5px dashed #3730a3; border-radius:12px; padding:16px 24px; text-align:center; cursor:pointer; transition:border-color .15s; }
         .code-box:hover { border-color:#6c47ff; }
+        @keyframes playerEnter { from{opacity:0;transform:translateX(-12px)} to{opacity:1;transform:translateX(0)} }
       `}</style>
 
       <button onClick={onBack} style={{ alignSelf:"flex-start", background:"none", border:"none", color:"#9f7cff", cursor:"pointer", fontSize:14, marginBottom:24 }}>← Voltar</button>
@@ -510,15 +527,22 @@ function Lobby({ roomId, isHost, persistedMyId, onGameStart, onBack }) {
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                 {(room?.players||[]).map((p,i) => (
-                  <div key={p.id} className="player-tag">
-                    <span style={{ background:`hsl(${i*60},70%,60%)`, width:8, height:8, borderRadius:"50%", flexShrink:0 }} />
-                    <span style={{ flex:1 }}>{p.name}</span>
-                    {p.isHost && <span style={{ fontSize:11, color:"#9f7cff" }}>Host</span>}
-                    {p.id === myId && <span style={{ fontSize:11, color:"#6e618f" }}>você</span>}
+                  <div key={p.id} className="player-tag"
+                    style={{ animation:"playerEnter .3s ease-out both", animationDelay:`${i*60}ms` }}>
+                    <div style={{ width:32, height:32, borderRadius:"50%", background:`hsl(${i*60},65%,55%)22`, border:`1.5px solid hsl(${i*60},65%,55%)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:600, color:`hsl(${i*60},65%,70%)`, flexShrink:0 }}>
+                      {p.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span style={{ flex:1, fontWeight: p.id === myId ? 500 : 400 }}>{p.name}</span>
+                    <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                      {p.isHost && <span style={{ fontSize:10, background:"#6c47ff22", border:"1px solid #6c47ff55", color:"#9f7cff", padding:"2px 8px", borderRadius:20 }}>Host</span>}
+                      {p.id === myId && <span style={{ fontSize:10, background:"#ffffff0a", border:"1px solid #ffffff18", color:"#6e618f", padding:"2px 8px", borderRadius:20 }}>você</span>}
+                    </div>
                   </div>
                 ))}
                 {(room?.players?.length||0) < 2 && (
-                  <div style={{ fontSize:13, color:"#6e618f", textAlign:"center", padding:8 }}>Aguardando mais jogadores... (mínimo 2)</div>
+                  <div style={{ fontSize:13, color:"#6e618f", textAlign:"center", padding:"12px 8px", background:"#0d0c1e", borderRadius:8, border:"1px dashed #2a2460" }}>
+                    Aguardando mais jogadores... ({2-(room?.players?.length||0)} faltando)
+                  </div>
                 )}
               </div>
             </div>
@@ -843,11 +867,11 @@ function VictoryScreen({ room, myId, onRestart, onHome }) {
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [screen, setScreen] = useState("landing");
-  const [roomId, setRoomId]   = useState(null);
-  const [isHost, setIsHost]   = useState(false);
-  // myId é gerado uma vez por sessão e preservado entre partidas
-  const [myId] = useState(() => `p_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+  const [screen, setScreen]       = useState("landing");
+  const [roomId, setRoomId]       = useState(null);
+  const [isHost, setIsHost]       = useState(false);
+  const [myId]                    = useState(() => `p_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+  const [playerName, setPlayerName] = useState(""); // preservado entre partidas
   const [finalRoom, setFinalRoom] = useState(null);
 
   return (
@@ -856,7 +880,10 @@ export default function App() {
                                               onJoinRoom={id  => { setRoomId(id);               setIsHost(false); setScreen("lobby");   }}
                                               onTutorial={() => setScreen("tutorial")} />}
       {screen === "tutorial" && <Tutorial onFinish={() => setScreen("landing")} />}
-      {screen === "lobby"    && <Lobby roomId={roomId} isHost={isHost} persistedMyId={myId}
+      {screen === "lobby"    && <Lobby roomId={roomId} isHost={isHost}
+                                        persistedMyId={myId}
+                                        persistedName={playerName}
+                                        onNameSet={n => setPlayerName(n)}
                                         onGameStart={() => setScreen("game")}
                                         onBack={() => setScreen("landing")} />}
       {screen === "game"     && <GameBoard roomId={roomId} myId={myId}
