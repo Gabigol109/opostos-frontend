@@ -377,7 +377,6 @@ function LandingPage({ onCreateRoom, onJoinRoom, onTutorial }) {
       <div style={{ textAlign:"center", padding:"20px", color:"#3d3560", fontSize:12, fontFamily:"'DM Sans',sans-serif" }}>
         Opostos Perfeitos — Jogo da Memória de Adjetivos<br></br>
         ⚡Criado pela Tropa do Gabigol⚡ 
-
       </div>
     </div>
   );
@@ -568,27 +567,23 @@ function GameBoard({ roomId, myId, onGameOver }) {
   const cfg = DIFFICULTY[room.difficulty] || DIFFICULTY["médio"];
   const totalCards = room.deck.length;
 
-  // Grids fixos por quantidade de cartas — escolhidos para caber sem scroll
-  // e ter a melhor estética (proporção equilibrada, pouquíssimas vazias)
-  // 14 cartas → 5 colunas × 3 linhas (1 vazia no canto)
-  // 22 cartas → 6 colunas × 4 linhas (2 vazias no canto)
-  // 34 cartas → 7 colunas × 5 linhas (1 vazia no canto)
-  const GRID_MAP = { 14: 5, 22: 6, 34: 7 };
-  const cols = GRID_MAP[totalCards] || (() => {
-    // fallback genérico: calcula o número de colunas mais próximo de raiz quadrada
-    for (let c = Math.round(Math.sqrt(totalCards)); c <= totalCards; c++) {
-      if (totalCards % c === 0 || Math.ceil(totalCards / c) * c - totalCards <= 1) return c;
-    }
-    return 4;
-  })();
-  const maxBoardWidth = { 5: 680, 6: 800, 7: 920 }[cols] || 760;
+  // Sempre 4 colunas por linha; última linha centralizada se incompleta
+  const COLS = 4;
+  const lastRowCount = totalCards % COLS || COLS; // quantas cartas na última linha
+  const hasIncompleteRow = totalCards % COLS !== 0;
+  // Agrupa as cartas em linhas de 4
+  const rows = [];
+  for (let i = 0; i < totalCards; i += COLS) {
+    rows.push(room.deck.slice(i, i + COLS));
+  }
+  const maxBoardWidth = 560;
 
   return (
     <div style={{ minHeight:"100vh", background:"#0a0a14", color:"#f0eefc", fontFamily:"'DM Sans',sans-serif", padding:"16px", boxSizing:"border-box" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Abril+Fatface&family=DM+Sans:wght@300;400;500&display=swap');
         .mem-card { perspective:1000px; cursor:pointer; }
-        .mem-card-inner { position:relative; width:100%; padding-bottom:100%; transition:transform .4s; transform-style:preserve-3d; }
+        .mem-card-inner { position:relative; width:100%; padding-bottom:140%; transition:transform .4s; transform-style:preserve-3d; }
         .mem-card-inner.flipped { transform:rotateY(180deg); }
         .mem-card-front,.mem-card-back { position:absolute; width:100%; height:100%; backface-visibility:hidden; border-radius:10px; display:flex; align-items:center; justify-content:center; }
         .mem-card-front { background:linear-gradient(135deg,#1e1a3f,#2a1f6e); border:1.5px solid #3730a380; transition:border-color .15s; }
@@ -600,13 +595,13 @@ function GameBoard({ roomId, myId, onGameOver }) {
         .score-card { background:#13112a; border:1px solid #2a2460; border-radius:10px; padding:8px 14px; display:flex; align-items:center; gap:8px; flex-shrink:0; min-width:0; }
         .score-card.active { border-color:#6c47ff; background:#1e1a3f; }
         .turn-badge { background:linear-gradient(135deg,#6c47ff,#9f6cff); border-radius:8px; padding:6px 16px; font-size:13px; font-weight:500; white-space:nowrap; }
-        .board-grid { display:grid; gap:6px; }
+        .board-grid { display:grid; gap:8px; }
         @media(max-width:480px){
-          .board-grid { gap:4px !important; }
-          .mem-card-back span { font-size:9px !important; }
+          .board-grid { gap:5px !important; }
+          .mem-card-back span { font-size:10px !important; }
         }
         @media(min-width:481px) and (max-width:768px){
-          .mem-card-back span { font-size:11px !important; }
+          .mem-card-back span { font-size:12px !important; }
         }
       `}</style>
 
@@ -636,36 +631,42 @@ function GameBoard({ roomId, myId, onGameOver }) {
         ))}
       </div>
 
-      {/* Tabuleiro responsivo */}
-      <div className="board-grid" style={{
-        gridTemplateColumns: `repeat(${cols}, 1fr)`,
-        maxWidth: maxBoardWidth,
-        margin:"0 auto",
-        width:"100%",
-        // Centraliza a carta vazia do canto para que o grid pareça intencional
-        justifyItems:"center",
-      }}>
-        {room.deck.map((card, idx) => {
-          const isFlipped = room.flipped.includes(card.id) || room.matched.includes(card.id);
-          const isMatched = room.matched.includes(card.id);
-          const word = decodeWord(card.wordB64);
-          // Se for a última carta e sobrar espaço (carta ímpar), centraliza
-          const isLastOdd = idx === room.deck.length - 1 && room.deck.length % cols !== 0;
-          const leftover = cols - (room.deck.length % cols || cols);
-          const lastCardStyle = isLastOdd ? { gridColumn: `${Math.floor(leftover / 2) + 1} / span 1` } : {};
+      {/* Tabuleiro — 4 colunas fixas, última linha centralizada */}
+      <div style={{ maxWidth: maxBoardWidth, margin:"0 auto", width:"100%", display:"flex", flexDirection:"column", gap:8 }}>
+        {rows.map((rowCards, rowIdx) => {
+          const isLastRow = rowIdx === rows.length - 1 && hasIncompleteRow;
           return (
-            <div key={card.id} style={lastCardStyle} className={`mem-card ${!isMyTurn || isMatched ? "disabled" : ""}`} onClick={() => flipCard(card.id)}>
-              <div className={`mem-card-inner ${isFlipped ? "flipped" : ""}`}>
-                <div className="mem-card-front">
-                  <span style={{ fontSize:"clamp(16px,3vw,24px)", opacity:0.25 }}>?</span>
-                </div>
-                <div className={`mem-card-back ${isMatched ? "matched" : ""}`}>
-                  {/* A palavra só aparece aqui após a carta ser virada — nunca no DOM antes */}
-                  <span style={{ fontSize:"clamp(9px,1.8vw,13px)", textAlign:"center", padding:"0 6px", fontWeight:500, color: isMatched?"#d1fae5":"#e9d5ff", lineHeight:1.3 }}>
-                    {isFlipped ? word : ""}
-                  </span>
-                </div>
-              </div>
+            <div key={rowIdx} style={{
+              display:"flex",
+              gap:8,
+              justifyContent: isLastRow ? "center" : "stretch",
+            }}>
+              {rowCards.map((card) => {
+                const isFlipped = room.flipped.includes(card.id) || room.matched.includes(card.id);
+                const isMatched = room.matched.includes(card.id);
+                const word = decodeWord(card.wordB64);
+                // Largura: (maxBoardWidth - 3*gap) / 4 = (560-24)/4 = 134px fixo
+                const cardW = (maxBoardWidth - (COLS - 1) * 8) / COLS;
+                return (
+                  <div
+                    key={card.id}
+                    className={`mem-card ${!isMyTurn || isMatched ? "disabled" : ""}`}
+                    onClick={() => flipCard(card.id)}
+                    style={{ width: cardW, flexShrink: 0 }}
+                  >
+                    <div className={`mem-card-inner ${isFlipped ? "flipped" : ""}`}>
+                      <div className="mem-card-front">
+                        <span style={{ fontSize:"clamp(16px,3vw,24px)", opacity:0.25 }}>?</span>
+                      </div>
+                      <div className={`mem-card-back ${isMatched ? "matched" : ""}`}>
+                        <span style={{ fontSize:"clamp(9px,1.8vw,13px)", textAlign:"center", padding:"0 6px", fontWeight:500, color: isMatched?"#d1fae5":"#e9d5ff", lineHeight:1.3 }}>
+                          {isFlipped ? word : ""}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           );
         })}
