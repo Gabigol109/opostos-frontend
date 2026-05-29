@@ -568,28 +568,27 @@ function GameBoard({ roomId, myId, onGameOver }) {
   const cfg = DIFFICULTY[room.difficulty] || DIFFICULTY["médio"];
   const totalCards = room.deck.length;
 
-  // Calcula o grid mais equilibrado e bonito para o número de cartas
-  // Objetivo: linhas e colunas o mais próximas possível, priorizando mais colunas que linhas
-  const getBestGrid = (n) => {
-    const options = [];
-    for (let c = 2; c <= Math.min(n, 8); c++) {
-      const r = Math.ceil(n / c);
-      const leftover = r * c - n; // cartas "vazias" na última linha
-      options.push({ cols: c, rows: r, leftover, ratio: Math.abs(c / r - 1.4) });
+  // Grids fixos por quantidade de cartas — escolhidos para caber sem scroll
+  // e ter a melhor estética (proporção equilibrada, pouquíssimas vazias)
+  // 14 cartas → 5 colunas × 3 linhas (1 vazia no canto)
+  // 22 cartas → 6 colunas × 4 linhas (2 vazias no canto)
+  // 34 cartas → 7 colunas × 5 linhas (1 vazia no canto)
+  const GRID_MAP = { 14: 5, 22: 6, 34: 7 };
+  const cols = GRID_MAP[totalCards] || (() => {
+    // fallback genérico: calcula o número de colunas mais próximo de raiz quadrada
+    for (let c = Math.round(Math.sqrt(totalCards)); c <= totalCards; c++) {
+      if (totalCards % c === 0 || Math.ceil(totalCards / c) * c - totalCards <= 1) return c;
     }
-    // Ordena: menos sobras, depois ratio mais próximo de 1.4 (paisagem leve)
-    options.sort((a, b) => a.leftover - b.leftover || a.ratio - b.ratio);
-    return options[0]?.cols || 4;
-  };
-  const cols = getBestGrid(totalCards);
-  const maxBoardWidth = cols <= 4 ? 520 : cols <= 5 ? 660 : cols <= 6 ? 780 : cols <= 7 ? 900 : 1020;
+    return 4;
+  })();
+  const maxBoardWidth = { 5: 680, 6: 800, 7: 920 }[cols] || 760;
 
   return (
     <div style={{ minHeight:"100vh", background:"#0a0a14", color:"#f0eefc", fontFamily:"'DM Sans',sans-serif", padding:"16px", boxSizing:"border-box" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Abril+Fatface&family=DM+Sans:wght@300;400;500&display=swap');
         .mem-card { perspective:1000px; cursor:pointer; }
-        .mem-card-inner { position:relative; width:100%; padding-bottom:140%; transition:transform .4s; transform-style:preserve-3d; }
+        .mem-card-inner { position:relative; width:100%; padding-bottom:100%; transition:transform .4s; transform-style:preserve-3d; }
         .mem-card-inner.flipped { transform:rotateY(180deg); }
         .mem-card-front,.mem-card-back { position:absolute; width:100%; height:100%; backface-visibility:hidden; border-radius:10px; display:flex; align-items:center; justify-content:center; }
         .mem-card-front { background:linear-gradient(135deg,#1e1a3f,#2a1f6e); border:1.5px solid #3730a380; transition:border-color .15s; }
@@ -601,13 +600,13 @@ function GameBoard({ roomId, myId, onGameOver }) {
         .score-card { background:#13112a; border:1px solid #2a2460; border-radius:10px; padding:8px 14px; display:flex; align-items:center; gap:8px; flex-shrink:0; min-width:0; }
         .score-card.active { border-color:#6c47ff; background:#1e1a3f; }
         .turn-badge { background:linear-gradient(135deg,#6c47ff,#9f6cff); border-radius:8px; padding:6px 16px; font-size:13px; font-weight:500; white-space:nowrap; }
-        .board-grid { display:grid; gap:8px; }
+        .board-grid { display:grid; gap:6px; }
         @media(max-width:480px){
-          .board-grid { gap:5px !important; }
-          .mem-card-back span { font-size:10px !important; }
+          .board-grid { gap:4px !important; }
+          .mem-card-back span { font-size:9px !important; }
         }
         @media(min-width:481px) and (max-width:768px){
-          .mem-card-back span { font-size:12px !important; }
+          .mem-card-back span { font-size:11px !important; }
         }
       `}</style>
 
@@ -643,13 +642,19 @@ function GameBoard({ roomId, myId, onGameOver }) {
         maxWidth: maxBoardWidth,
         margin:"0 auto",
         width:"100%",
+        // Centraliza a carta vazia do canto para que o grid pareça intencional
+        justifyItems:"center",
       }}>
-        {room.deck.map((card) => {
+        {room.deck.map((card, idx) => {
           const isFlipped = room.flipped.includes(card.id) || room.matched.includes(card.id);
           const isMatched = room.matched.includes(card.id);
           const word = decodeWord(card.wordB64);
+          // Se for a última carta e sobrar espaço (carta ímpar), centraliza
+          const isLastOdd = idx === room.deck.length - 1 && room.deck.length % cols !== 0;
+          const leftover = cols - (room.deck.length % cols || cols);
+          const lastCardStyle = isLastOdd ? { gridColumn: `${Math.floor(leftover / 2) + 1} / span 1` } : {};
           return (
-            <div key={card.id} className={`mem-card ${!isMyTurn || isMatched ? "disabled" : ""}`} onClick={() => flipCard(card.id)}>
+            <div key={card.id} style={lastCardStyle} className={`mem-card ${!isMyTurn || isMatched ? "disabled" : ""}`} onClick={() => flipCard(card.id)}>
               <div className={`mem-card-inner ${isFlipped ? "flipped" : ""}`}>
                 <div className="mem-card-front">
                   <span style={{ fontSize:"clamp(16px,3vw,24px)", opacity:0.25 }}>?</span>
