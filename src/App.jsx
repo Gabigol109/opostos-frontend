@@ -14,30 +14,30 @@ const _RAW_PAIRS = [
   ["Generoso","Egoísta"],["Sincero","Mentiroso"],["Educado","Rude"],
   ["Animado","Entediado"],["Gentil","Cruel"],["Ativo","Preguiçoso"],
   ["Calmo","Agitado"],["Certo","Errado"],["Cheio","Vazio"],["Caro","Barato"],
-  ["Fácil","Difícil"],["Feliz","Infeliz"],["Gordo","Magro"],["Grosso","Fino"],
-  ["Largo","Estreito"],["Legal","Ilegal"],["Leve","Pesado"],["Longo","Curto"],
-  ["Macio","Áspero"],["Moderno","Antigo"],["Molhado","Seco"],["Nobre","Humilde"],
-  ["Obediente","Rebelde"],["Ocupado","Livre"],["Ousado","Tímido"],
-  ["Paciente","Impaciente"],["Perigoso","Seguro"],["Positivo","Negativo"],
-  ["Profundo","Raso"],["Próximo","Distante"],["Público","Privado"],
-  ["Rígido","Flexível"],["Sábio","Ignorante"],["Saudável","Doente"],
-  ["Simples","Complexo"],["Sólido","Líquido"],["Suave","Brusco"],
-  ["Superior","Inferior"],["Tranquilo","Nervoso"],["Útil","Inútil"],
-  ["Valente","Medroso"],["Verdadeiro","Falso"],["Vivo","Morto"],
-  ["Aberto","Fechado"],["Abundante","Escasso"],["Agradável","Desagradável"],
-  ["Amigável","Hostil"],["Amplo","Restrito"],["Antigo","Recente"],
-  ["Áspero","Liso"],["Belo","Horrível"],["Bravo","Manso"],["Brilhante","Opaco"],
+  ["Fácil","Difícil"],["Feliz","Infeliz"],["Grosso","Fino"],["Largo","Estreito"],
+  ["Legal","Ilegal"],["Leve","Pesado"],["Longo","Curto"],["Macio","Áspero"],
+  ["Moderno","Antigo"],["Molhado","Seco"],["Nobre","Humilde"],["Obediente","Rebelde"],
+  ["Ocupado","Livre"],["Ousado","Tímido"],["Paciente","Impaciente"],
+  ["Perigoso","Seguro"],["Positivo","Negativo"],["Profundo","Raso"],
+  ["Próximo","Distante"],["Público","Privado"],["Rígido","Flexível"],
+  ["Sábio","Ignorante"],["Saudável","Doente"],["Simples","Complexo"],
+  ["Sólido","Líquido"],["Suave","Brusco"],["Superior","Inferior"],
+  ["Tranquilo","Nervoso"],["Útil","Inútil"],["Valente","Medroso"],
+  ["Verdadeiro","Falso"],["Vivo","Morto"],["Aberto","Fechado"],
+  ["Abundante","Escasso"],["Agradável","Desagradável"],["Amigável","Hostil"],
+  ["Amplo","Restrito"],["Belo","Horrível"],["Bravo","Manso"],["Brilhante","Opaco"],
   ["Capaz","Incapaz"],["Cauteloso","Descuidado"],["Civilizado","Selvagem"],
   ["Confiante","Inseguro"],["Constante","Variável"],["Contente","Insatisfeito"],
   ["Criativo","Repetitivo"],["Culpado","Inocente"],["Curioso","Indiferente"],
   ["Dedicado","Negligente"],["Delicado","Grosseiro"],["Denso","Ralo"],
   ["Direto","Indireto"],["Disciplinado","Indisciplinado"],["Doce","Amargo"],
-  ["Doméstico","Selvagem"],["Duradouro","Passageiro"],["Eficiente","Ineficiente"],
+  ["Doméstico","Exótico"],["Duradouro","Passageiro"],["Eficiente","Ineficiente"],
   ["Elegante","Desleixado"],["Empolgado","Apático"],["Engraçado","Sério"],
   ["Equilibrado","Instável"],["Estável","Caótico"],["Eterno","Temporário"],
   ["Evidente","Oculto"],["Exato","Impreciso"],["Famoso","Desconhecido"],
   ["Fantástico","Terrível"],["Firme","Frágil"],["Fluente","Travado"],
   ["Formal","Informal"],["Frequente","Raro"],["Funcional","Quebrado"],
+  ["Antigo","Recente"],["Áspero","Liso"],
 ];
 
 // Codifica cada palavra em base64 para não aparecer como texto legível no HTML
@@ -62,10 +62,20 @@ function shuffleArray(arr) {
 }
 
 function buildDeck(numPairs) {
-  const chosen = shuffleArray(ADJECTIVE_PAIRS).slice(0, numPairs);
+  // Garante que nenhuma palavra apareça mais de uma vez no deck
+  // (evita duplicatas mesmo que a lista _RAW_PAIRS tenha palavras repetidas)
+  const usedWords = new Set();
+  const unique = shuffleArray(ADJECTIVE_PAIRS).filter(([aB64, bB64]) => {
+    const a = decodeWord(aB64);
+    const b = decodeWord(bB64);
+    if (usedWords.has(a) || usedWords.has(b)) return false;
+    usedWords.add(a);
+    usedWords.add(b);
+    return true;
+  });
+  const chosen = unique.slice(0, numPairs);
   const cards = [];
   chosen.forEach(([adjB64, oppB64], i) => {
-    // Armazena apenas o id e groupId; a palavra fica em base64 e só é decodificada na hora de exibir
     cards.push({ id: `${i}-a`, wordB64: adjB64, groupId: i, side: "a" });
     cards.push({ id: `${i}-b`, wordB64: oppB64, groupId: i, side: "b" });
   });
@@ -383,38 +393,32 @@ function LandingPage({ onCreateRoom, onJoinRoom, onTutorial }) {
 }
 
 // ─── LOBBY ────────────────────────────────────────────────────────────────────
-function Lobby({ roomId, isHost, onGameStart, onBack }) {
+function Lobby({ roomId, isHost, persistedMyId, onGameStart, onBack }) {
   const [room, setRoom] = useState(null);
   const [playerName, setPlayerName] = useState("");
+  // nameSet começa true se já temos persistedMyId (voltou de uma partida)
   const [nameSet, setNameSet] = useState(false);
-  const [myId] = useState(() => `p_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+  const myId = persistedMyId; // usa sempre o mesmo ID, não gera novo
   const [difficulty, setDifficulty] = useState("médio");
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
-  const { send, connected } = useWebSocket((msg) => {
-    if (msg.type === "ROOM_STATE" && msg.payload) {
-      setRoom(msg.payload);
-      // Só redireciona para o jogo se o jogador já entrou na sala (nameSet)
-      // Isso evita redirect imediato ao voltar para o lobby após "Jogar Novamente"
-      if (msg.payload.gameStarted && nameSet) onGameStart(msg.payload, myId);
-    }
-    if (msg.type === "ERROR") setError(msg.payload);
-  });
+  const nameSetRef = useRef(nameSet);
+  nameSetRef.current = nameSet;
 
-  // Ao montar o Lobby vindo de "Jogar Novamente", reseta o estado da sala no servidor
-  const resetDoneRef = useRef(false);
-  useEffect(() => {
-    if (!resetDoneRef.current) {
-      resetDoneRef.current = true;
-      // Pequeno delay para garantir que a conexão WS está aberta
-      const t = setTimeout(() => {
-        send("RESET_ROOM", { roomId });
-      }, 300);
-      return () => clearTimeout(t);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const { send, connected } = useWebSocket(
+    (msg) => {
+      if (msg.type === "ROOM_STATE" && msg.payload) {
+        setRoom(msg.payload);
+        // Redireciona para o jogo só se o jogador já entrou na sala
+        if (msg.payload.gameStarted && nameSetRef.current) onGameStart();
+      }
+      if (msg.type === "ERROR") setError(msg.payload);
+    },
+    // onOpen: quando a conexão abre, envia RESET_ROOM para limpar partida anterior
+    (sendFn) => sendFn("RESET_ROOM", { roomId })
+  );
 
   const joinRoom = () => {
     const name = playerName.trim();
@@ -567,16 +571,21 @@ function GameBoard({ roomId, myId, onGameOver }) {
   const cfg = DIFFICULTY[room.difficulty] || DIFFICULTY["médio"];
   const totalCards = room.deck.length;
 
-  // Sempre 4 colunas por linha; última linha centralizada se incompleta
-  const COLS = 4;
-  const lastRowCount = totalCards % COLS || COLS; // quantas cartas na última linha
-  const hasIncompleteRow = totalCards % COLS !== 0;
-  // Agrupa as cartas em linhas de 4
-  const rows = [];
-  for (let i = 0; i < totalCards; i += COLS) {
-    rows.push(room.deck.slice(i, i + COLS));
-  }
-  const maxBoardWidth = 560;
+  // Calcula o grid mais equilibrado e bonito para o número de cartas
+  // Objetivo: linhas e colunas o mais próximas possível, priorizando mais colunas que linhas
+  const getBestGrid = (n) => {
+    const options = [];
+    for (let c = 2; c <= Math.min(n, 8); c++) {
+      const r = Math.ceil(n / c);
+      const leftover = r * c - n; // cartas "vazias" na última linha
+      options.push({ cols: c, rows: r, leftover, ratio: Math.abs(c / r - 1.4) });
+    }
+    // Ordena: menos sobras, depois ratio mais próximo de 1.4 (paisagem leve)
+    options.sort((a, b) => a.leftover - b.leftover || a.ratio - b.ratio);
+    return options[0]?.cols || 4;
+  };
+  const cols = getBestGrid(totalCards);
+  const maxBoardWidth = cols <= 4 ? 520 : cols <= 5 ? 660 : cols <= 6 ? 780 : cols <= 7 ? 900 : 1020;
 
   return (
     <div style={{ minHeight:"100vh", background:"#0a0a14", color:"#f0eefc", fontFamily:"'DM Sans',sans-serif", padding:"16px", boxSizing:"border-box" }}>
@@ -631,42 +640,30 @@ function GameBoard({ roomId, myId, onGameOver }) {
         ))}
       </div>
 
-      {/* Tabuleiro — 4 colunas fixas, última linha centralizada */}
-      <div style={{ maxWidth: maxBoardWidth, margin:"0 auto", width:"100%", display:"flex", flexDirection:"column", gap:8 }}>
-        {rows.map((rowCards, rowIdx) => {
-          const isLastRow = rowIdx === rows.length - 1 && hasIncompleteRow;
+      {/* Tabuleiro responsivo */}
+      <div className="board-grid" style={{
+        gridTemplateColumns: `repeat(${cols}, 1fr)`,
+        maxWidth: maxBoardWidth,
+        margin:"0 auto",
+        width:"100%",
+      }}>
+        {room.deck.map((card) => {
+          const isFlipped = room.flipped.includes(card.id) || room.matched.includes(card.id);
+          const isMatched = room.matched.includes(card.id);
+          const word = decodeWord(card.wordB64);
           return (
-            <div key={rowIdx} style={{
-              display:"flex",
-              gap:8,
-              justifyContent: isLastRow ? "center" : "stretch",
-            }}>
-              {rowCards.map((card) => {
-                const isFlipped = room.flipped.includes(card.id) || room.matched.includes(card.id);
-                const isMatched = room.matched.includes(card.id);
-                const word = decodeWord(card.wordB64);
-                // Largura: (maxBoardWidth - 3*gap) / 4 = (560-24)/4 = 134px fixo
-                const cardW = (maxBoardWidth - (COLS - 1) * 8) / COLS;
-                return (
-                  <div
-                    key={card.id}
-                    className={`mem-card ${!isMyTurn || isMatched ? "disabled" : ""}`}
-                    onClick={() => flipCard(card.id)}
-                    style={{ width: cardW, flexShrink: 0 }}
-                  >
-                    <div className={`mem-card-inner ${isFlipped ? "flipped" : ""}`}>
-                      <div className="mem-card-front">
-                        <span style={{ fontSize:"clamp(16px,3vw,24px)", opacity:0.25 }}>?</span>
-                      </div>
-                      <div className={`mem-card-back ${isMatched ? "matched" : ""}`}>
-                        <span style={{ fontSize:"clamp(9px,1.8vw,13px)", textAlign:"center", padding:"0 6px", fontWeight:500, color: isMatched?"#d1fae5":"#e9d5ff", lineHeight:1.3 }}>
-                          {isFlipped ? word : ""}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+            <div key={card.id} className={`mem-card ${!isMyTurn || isMatched ? "disabled" : ""}`} onClick={() => flipCard(card.id)}>
+              <div className={`mem-card-inner ${isFlipped ? "flipped" : ""}`}>
+                <div className="mem-card-front">
+                  <span style={{ fontSize:"clamp(16px,3vw,24px)", opacity:0.25 }}>?</span>
+                </div>
+                <div className={`mem-card-back ${isMatched ? "matched" : ""}`}>
+                  {/* A palavra só aparece aqui após a carta ser virada — nunca no DOM antes */}
+                  <span style={{ fontSize:"clamp(9px,1.8vw,13px)", textAlign:"center", padding:"0 6px", fontWeight:500, color: isMatched?"#d1fae5":"#e9d5ff", lineHeight:1.3 }}>
+                    {isFlipped ? word : ""}
+                  </span>
+                </div>
+              </div>
             </div>
           );
         })}
@@ -852,7 +849,8 @@ export default function App() {
   const [screen, setScreen] = useState("landing");
   const [roomId, setRoomId]   = useState(null);
   const [isHost, setIsHost]   = useState(false);
-  const [myId, setMyId]       = useState(null);
+  // myId é gerado uma vez por sessão e preservado entre partidas
+  const [myId] = useState(() => `p_${Date.now()}_${Math.random().toString(36).slice(2)}`);
   const [finalRoom, setFinalRoom] = useState(null);
 
   return (
@@ -861,8 +859,8 @@ export default function App() {
                                               onJoinRoom={id  => { setRoomId(id);               setIsHost(false); setScreen("lobby");   }}
                                               onTutorial={() => setScreen("tutorial")} />}
       {screen === "tutorial" && <Tutorial onFinish={() => setScreen("landing")} />}
-      {screen === "lobby"    && <Lobby roomId={roomId} isHost={isHost}
-                                        onGameStart={(_, pId) => { setMyId(pId); setScreen("game"); }}
+      {screen === "lobby"    && <Lobby roomId={roomId} isHost={isHost} persistedMyId={myId}
+                                        onGameStart={() => setScreen("game")}
                                         onBack={() => setScreen("landing")} />}
       {screen === "game"     && <GameBoard roomId={roomId} myId={myId}
                                             onGameOver={r => { setFinalRoom(r); setScreen("victory"); }} />}
