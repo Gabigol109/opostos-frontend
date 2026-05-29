@@ -571,21 +571,13 @@ function GameBoard({ roomId, myId, onGameOver }) {
   const cfg = DIFFICULTY[room.difficulty] || DIFFICULTY["médio"];
   const totalCards = room.deck.length;
 
-  // Calcula o grid mais equilibrado e bonito para o número de cartas
-  // Objetivo: linhas e colunas o mais próximas possível, priorizando mais colunas que linhas
-  const getBestGrid = (n) => {
-    const options = [];
-    for (let c = 2; c <= Math.min(n, 8); c++) {
-      const r = Math.ceil(n / c);
-      const leftover = r * c - n; // cartas "vazias" na última linha
-      options.push({ cols: c, rows: r, leftover, ratio: Math.abs(c / r - 1.4) });
-    }
-    // Ordena: menos sobras, depois ratio mais próximo de 1.4 (paisagem leve)
-    options.sort((a, b) => a.leftover - b.leftover || a.ratio - b.ratio);
-    return options[0]?.cols || 4;
-  };
-  const cols = getBestGrid(totalCards);
-  const maxBoardWidth = cols <= 4 ? 520 : cols <= 5 ? 660 : cols <= 6 ? 780 : cols <= 7 ? 900 : 1020;
+  // 4 colunas fixas por linha; última linha centralizada se incompleta
+  const COLS = 4;
+  const hasIncompleteRow = totalCards % COLS !== 0;
+  const rows = [];
+  for (let i = 0; i < totalCards; i += COLS) rows.push(room.deck.slice(i, i + COLS));
+  const CARD_W = 134; // (560 - 3*8) / 4
+  const maxBoardWidth = 560;
 
   return (
     <div style={{ minHeight:"100vh", background:"#0a0a14", color:"#f0eefc", fontFamily:"'DM Sans',sans-serif", padding:"16px", boxSizing:"border-box" }}>
@@ -640,33 +632,38 @@ function GameBoard({ roomId, myId, onGameOver }) {
         ))}
       </div>
 
-      {/* Tabuleiro responsivo */}
-      <div className="board-grid" style={{
-        gridTemplateColumns: `repeat(${cols}, 1fr)`,
-        maxWidth: maxBoardWidth,
-        margin:"0 auto",
-        width:"100%",
-      }}>
-        {room.deck.map((card) => {
-          const isFlipped = room.flipped.includes(card.id) || room.matched.includes(card.id);
-          const isMatched = room.matched.includes(card.id);
-          const word = decodeWord(card.wordB64);
-          return (
-            <div key={card.id} className={`mem-card ${!isMyTurn || isMatched ? "disabled" : ""}`} onClick={() => flipCard(card.id)}>
-              <div className={`mem-card-inner ${isFlipped ? "flipped" : ""}`}>
-                <div className="mem-card-front">
-                  <span style={{ fontSize:"clamp(16px,3vw,24px)", opacity:0.25 }}>?</span>
+      {/* Tabuleiro — 4 colunas por linha, última linha centralizada */}
+      <div style={{ maxWidth: maxBoardWidth, margin:"0 auto", width:"100%", display:"flex", flexDirection:"column", gap:8 }}>
+        {rows.map((rowCards, rowIdx) => (
+          <div key={rowIdx} style={{
+            display:"flex", gap:8,
+            justifyContent: (rowIdx === rows.length - 1 && hasIncompleteRow) ? "center" : "flex-start",
+          }}>
+            {rowCards.map((card) => {
+              const isFlipped = room.flipped.includes(card.id) || room.matched.includes(card.id);
+              const isMatched = room.matched.includes(card.id);
+              const word = decodeWord(card.wordB64);
+              return (
+                <div key={card.id}
+                  className={`mem-card ${!isMyTurn || isMatched ? "disabled" : ""}`}
+                  onClick={() => flipCard(card.id)}
+                  style={{ width: CARD_W, flexShrink: 0 }}
+                >
+                  <div className={`mem-card-inner ${isFlipped ? "flipped" : ""}`}>
+                    <div className="mem-card-front">
+                      <span style={{ fontSize:"clamp(16px,3vw,24px)", opacity:0.25 }}>?</span>
+                    </div>
+                    <div className={`mem-card-back ${isMatched ? "matched" : ""}`}>
+                      <span style={{ fontSize:"clamp(9px,1.8vw,13px)", textAlign:"center", padding:"0 6px", fontWeight:500, color: isMatched?"#d1fae5":"#e9d5ff", lineHeight:1.3 }}>
+                        {isFlipped ? word : ""}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className={`mem-card-back ${isMatched ? "matched" : ""}`}>
-                  {/* A palavra só aparece aqui após a carta ser virada — nunca no DOM antes */}
-                  <span style={{ fontSize:"clamp(9px,1.8vw,13px)", textAlign:"center", padding:"0 6px", fontWeight:500, color: isMatched?"#d1fae5":"#e9d5ff", lineHeight:1.3 }}>
-                    {isFlipped ? word : ""}
-                  </span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+              );
+            })}
+          </div>
+        ))}
       </div>
 
       <div style={{ textAlign:"center", marginTop:16, color:"#4a4272", fontSize:12 }}>
