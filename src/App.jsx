@@ -595,13 +595,22 @@ function GameBoard({ roomId, myId, onGameOver }) {
   const cfg = DIFFICULTY[room.difficulty] || DIFFICULTY["médio"];
   const totalCards = room.deck.length;
 
-  // 4 colunas fixas por linha; última linha centralizada se incompleta
-  const COLS = 4;
+  // Colunas por dificuldade: fácil=4, médio=6, difícil=7
+  const COLS_MAP = { "fácil": 4, "médio": 6, "difícil": 7 };
+  const COLS = COLS_MAP[room.difficulty] || 4;
+  // Largura máxima do tabuleiro e largura de cada carta por dificuldade
+  // fácil:   4 cols × 134px + 3×8px gap = 560px
+  // médio:   6 cols × 120px + 5×8px gap = 760px
+  // difícil: 7 cols × 114px + 6×8px gap = 846px
+  const BOARD_CFG = {
+    "fácil":   { maxW: 560, cardW: 134 },
+    "médio":   { maxW: 760, cardW: 120 },
+    "difícil": { maxW: 846, cardW: 114 },
+  };
+  const { maxW: maxBoardWidth, cardW: CARD_W } = BOARD_CFG[room.difficulty] || BOARD_CFG["fácil"];
   const hasIncompleteRow = totalCards % COLS !== 0;
   const rows = [];
   for (let i = 0; i < totalCards; i += COLS) rows.push(room.deck.slice(i, i + COLS));
-  const CARD_W = 134; // (560 - 3*8) / 4
-  const maxBoardWidth = 560;
 
   return (
     <div style={{ minHeight:"100vh", background:"#0a0a14", color:"#f0eefc", fontFamily:"'DM Sans',sans-serif", padding:"16px", boxSizing:"border-box" }}>
