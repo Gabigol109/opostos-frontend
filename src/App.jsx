@@ -3,9 +3,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:4000";
 
-// [CHANGE 3] Intervalo do heartbeat e timeout de desconexão
-const HEARTBEAT_INTERVAL_MS = 5000;   // envia ping a cada 5s
-const DISCONNECT_TIMEOUT_MS = 12000;  // considera desconectado após 12s sem pong
+const HEARTBEAT_INTERVAL_MS = 5000;
+const DISCONNECT_TIMEOUT_MS = 12000;
 
 // ─── 100 PARES DE ADJETIVOS ───────────────────────────────────────────────────
 const _RAW_PAIRS = [
@@ -198,8 +197,6 @@ function Tutorial({ onFinish }) {
         .bubble::after { content:''; position:absolute; bottom:-12px; left:50%; transform:translateX(-50%); border:6px solid transparent; border-top-color:#6c47ff55; }
         .step-dot { width:8px; height:8px; border-radius:50%; background:#2a2460; transition:background .2s; }
         .step-dot.active { background:#6c47ff; }
-
-        /* [CHANGE 1] Tutorial responsivo */
         @media(max-width:480px){
           .tut-inner{width:70px;height:98px;}
           .tut-back{font-size:11px;}
@@ -256,20 +253,27 @@ function Tutorial({ onFinish }) {
 }
 
 // ─── LANDING PAGE ─────────────────────────────────────────────────────────────
-function LandingPage({ onCreateRoom, onJoinRoom, onTutorial }) {
+function LandingPage({ onCreateRoom, onJoinRoom, onTutorial, errorMessage }) {
   const [joinId, setJoinId] = useState("");
-  const [joinError, setJoinError] = useState("");
-  const [showJoin, setShowJoin] = useState(false);
+  const [joinError, setJoinError] = useState(errorMessage || "");
+  const [showJoin, setShowJoin] = useState(!!errorMessage);
   const [checking, setChecking] = useState(false);
   const joinIdRef = useRef(joinId);
   joinIdRef.current = joinId;
+
+  // Mostra o erro de entrada se vier da prop
+  useEffect(() => {
+    if (errorMessage) {
+      setJoinError(errorMessage);
+      setShowJoin(true);
+    }
+  }, [errorMessage]);
 
   const { send, connected } = useWebSocket((msg) => {
     if (msg.type === "ROOM_STATE") {
       setChecking(false);
       if (!msg.payload) {
         setJoinError("Sala não encontrada. Verifique o código.");
-      // [CHANGE 2] Bloqueia entrada após início da partida
       } else if (msg.payload.gameStarted) {
         setJoinError("O jogo já começou nessa sala. Aguarde a próxima partida.");
       } else {
@@ -316,8 +320,6 @@ function LandingPage({ onCreateRoom, onJoinRoom, onTutorial }) {
         .join-input:focus { border-color:#6c47ff; }
         .mini-card     { width:56px; height:80px; border-radius:8px; background:linear-gradient(135deg,#2a1a6e,#4a2dbf); border:1px solid #6c47ff55; display:flex; align-items:center; justify-content:center; font-size:11px; color:#c4b5fd; text-align:center; }
         .ws-dot        { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:6px; }
-
-        /* [CHANGE 1] Landing responsivo */
         .hero-btns { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; }
         @media(max-width:600px){
           .hero-btns { flex-direction:column; align-items:stretch; width:100%; max-width:320px; }
@@ -336,6 +338,8 @@ function LandingPage({ onCreateRoom, onJoinRoom, onTutorial }) {
         @media(min-width:601px) and (max-width:900px){
           .feature-grid { grid-template-columns: repeat(2,1fr) !important; }
         }
+        /* Banner de erro genérico */
+        .error-banner { background:#2a0a0a; border:1px solid #f87171; border-radius:12px; padding:14px 20px; text-align:center; color:#f87171; font-size:14px; max-width:360px; margin-bottom:16px; }
       `}</style>
 
       <div style={{ position:"fixed", top:12, right:16, fontSize:12, color: connected?"#34d399":"#f87171", fontFamily:"'DM Sans',sans-serif", display:"flex", alignItems:"center", zIndex:100 }}>
@@ -344,7 +348,6 @@ function LandingPage({ onCreateRoom, onJoinRoom, onTutorial }) {
       </div>
 
       <div className="land-hero" style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"60px 24px", textAlign:"center", position:"relative", overflow:"hidden" }}>
-        {/* floating cards — hidden on mobile/landscape via CSS */}
         <div className="mini-card-top" style={{ position:"absolute", top:60, left:"10%", opacity:0.6 }}><div className="mini-card card-float"><span>Alegre</span></div></div>
         <div className="mini-card-top" style={{ position:"absolute", top:100, right:"12%", opacity:0.5 }}><div className="mini-card card-float-2"><span>Triste</span></div></div>
         <div className="mini-card-top" style={{ position:"absolute", bottom:80, left:"8%", opacity:0.4 }}><div className="mini-card card-float-3"><span>Forte</span></div></div>
@@ -357,6 +360,13 @@ function LandingPage({ onCreateRoom, onJoinRoom, onTutorial }) {
         <p className="hero-desc" style={{ fontSize:18, color:"#a094c8", maxWidth:480, margin:"0 0 48px", lineHeight:1.6, fontFamily:"'DM Sans',sans-serif" }}>
           Um jogo de memória multiplayer onde você precisa encontrar pares de adjetivos opostos. Quanto mais opostos, mais pontos!
         </p>
+
+        {/* Banner de erro vindo da tela de jogo (ex: líder quitou) */}
+        {errorMessage && (
+          <div className="error-banner" style={{ marginBottom:24 }}>
+            ⚠️ {errorMessage}
+          </div>
+        )}
 
         <div className="hero-btns">
           <button className="btn-primary"    onClick={onCreateRoom} disabled={!connected}>✦ Criar uma Sala</button>
@@ -455,7 +465,6 @@ function Lobby({ roomId, isHost, persistedMyId, persistedName, onNameSet, onGame
   const joinRoom = () => {
     const name = playerName.trim();
     if (!name) { setError("Digite seu nome"); return; }
-    // [CHANGE 2] Bloqueia entrada se partida em andamento (verificação local também)
     if (room && room.gameStarted) {
       setError("O jogo já começou. Aguarde a próxima partida.");
       return;
@@ -495,8 +504,6 @@ function Lobby({ roomId, isHost, persistedMyId, persistedName, onNameSet, onGame
         .code-box { background:#0d0c1e; border:1.5px dashed #3730a3; border-radius:12px; padding:16px 24px; text-align:center; cursor:pointer; transition:border-color .15s; }
         .code-box:hover { border-color:#6c47ff; }
         @keyframes playerEnter { from{opacity:0;transform:translateX(-12px)} to{opacity:1;transform:translateX(0)} }
-
-        /* [CHANGE 1] Lobby responsivo */
         @media(max-width:600px){
           .lobby-card { padding:20px 16px; }
           .diff-btn { padding:6px 12px; font-size:13px; }
@@ -600,23 +607,27 @@ function Lobby({ roomId, isHost, persistedMyId, persistedName, onNameSet, onGame
 }
 
 // ─── GAME BOARD ───────────────────────────────────────────────────────────────
-function GameBoard({ roomId, myId, onGameOver }) {
+function GameBoard({ roomId, myId, onGameOver, onForcedHome }) {
   const [room, setRoom] = useState(null);
 
-  // [CHANGE 3] Rastreia o último "pong" recebido de cada jogador { playerId: timestamp }
   const lastPongRef = useRef({});
-  // Ref para o send do WS (atualizado após conexão)
   const sendRef = useRef(null);
-  // Timer do heartbeat
   const heartbeatTimerRef = useRef(null);
 
   const { send } = useWebSocket(
     (msg) => {
       if (msg.type === "ROOM_STATE" && msg.payload) {
-        setRoom(msg.payload);
-        if (msg.payload.gameOver) onGameOver(msg.payload);
+        const r = msg.payload;
+        setRoom(r);
+        if (r.gameOver) {
+          // host_left → manda todos para a tela inicial
+          if (r.gameOverReason === "host_left") {
+            onForcedHome("Seu líder quitou a partida.");
+          } else {
+            onGameOver(r);
+          }
+        }
       }
-      // [CHANGE 3] Recebe pong de outro jogador — atualiza timestamp
       if (msg.type === "PONG" && msg.payload?.playerId) {
         lastPongRef.current[msg.payload.playerId] = Date.now();
       }
@@ -624,15 +635,11 @@ function GameBoard({ roomId, myId, onGameOver }) {
     (sendFn) => {
       sendFn("GET_ROOM", { roomId, playerId: myId });
       sendRef.current = sendFn;
-      // [CHANGE 3] Inicializa o próprio jogador como "vivo"
       lastPongRef.current[myId] = Date.now();
 
-      // Inicia heartbeat
       heartbeatTimerRef.current = setInterval(() => {
-        // Envia ping para o servidor (que faz broadcast do pong para todos)
         sendFn("PING", { roomId, playerId: myId });
 
-        // Verifica quais jogadores não respondem há mais de DISCONNECT_TIMEOUT_MS
         const now = Date.now();
         setRoom(prevRoom => {
           if (!prevRoom || prevRoom.gameOver) return prevRoom;
@@ -642,25 +649,21 @@ function GameBoard({ roomId, myId, onGameOver }) {
             now - lastPongRef.current[p.id] > DISCONNECT_TIMEOUT_MS
           );
           if (disconnected.length === 0) return prevRoom;
-
-          // Remove jogadores desconectados
           disconnected.forEach(p => {
             sendFn("REMOVE_PLAYER", { roomId, playerId: p.id });
           });
-          return prevRoom; // o servidor retornará o ROOM_STATE atualizado
+          return prevRoom;
         });
       }, HEARTBEAT_INTERVAL_MS);
     }
   );
 
-  // [CHANGE 3] Limpa o timer ao desmontar
   useEffect(() => {
     return () => {
       if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
     };
   }, []);
 
-  // [CHANGE 3] Registra o próprio jogador como vivo a cada render
   useEffect(() => {
     lastPongRef.current[myId] = Date.now();
   });
@@ -683,146 +686,231 @@ function GameBoard({ roomId, myId, onGameOver }) {
 
   const cfg = DIFFICULTY[room.difficulty] || DIFFICULTY["médio"];
   const totalCards = room.deck.length;
+  const totalPairs = totalCards / 2;
+  const matchedPairs = room.matched.length / 2;
 
-  // [CHANGE 1] Colunas adaptadas por dificuldade e viewport
-  // Usamos CSS grid com auto-fill para colunas responsivas
-  const COLS_MAP = { "fácil": 4, "médio": 6, "difícil": 7 };
-  const COLS = COLS_MAP[room.difficulty] || 4;
+  // ── Layout responsivo do tabuleiro ──────────────────────────────────────────
+  // Estratégia: usa CSS Grid com repeat(auto-fill) e cartas que crescem
+  // para preencher o espaço disponível, mas com min/max controlados.
+  // Número de colunas por dificuldade:
+  //   fácil   → 4 colunas  (14 cartas → 4 linhas)
+  //   médio   → 4 colunas  (22 cartas → 6 linhas) em portrait mobile
+  //             6 colunas  em telas maiores
+  //   difícil → 4 colunas  (34 cartas → 9 linhas) em portrait mobile
+  //             6 colunas  em telas maiores
+  const COLS_BY_DIFF = { "fácil": 4, "médio": 4, "difícil": 4 };
+  // Em landscape ou tablet usamos mais colunas (via CSS)
+  const mobileCols = COLS_BY_DIFF[room.difficulty] || 4;
 
-  const BOARD_CFG = {
-    "fácil":   { maxW: 560, cardW: 134 },
-    "médio":   { maxW: 760, cardW: 120 },
-    "difícil": { maxW: 846, cardW: 114 },
-  };
-  const { maxW: maxBoardWidth, cardW: CARD_W } = BOARD_CFG[room.difficulty] || BOARD_CFG["fácil"];
-  const hasIncompleteRow = totalCards % COLS !== 0;
+  const hasIncompleteRow = totalCards % mobileCols !== 0;
   const rows = [];
-  for (let i = 0; i < totalCards; i += COLS) rows.push(room.deck.slice(i, i + COLS));
+  for (let i = 0; i < totalCards; i += mobileCols) rows.push(room.deck.slice(i, i + mobileCols));
 
   return (
-    <div style={{ minHeight:"100vh", background:"#0a0a14", color:"#f0eefc", fontFamily:"'DM Sans',sans-serif", padding:"16px", boxSizing:"border-box" }}>
+    <div style={{
+      // Ocupa exatamente a viewport sem scroll vertical em portrait mobile
+      minHeight: "100dvh",
+      height: "100dvh",
+      background:"#0a0a14",
+      color:"#f0eefc",
+      fontFamily:"'DM Sans',sans-serif",
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden",
+      boxSizing: "border-box",
+    }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Abril+Fatface&family=DM+Sans:wght@300;400;500&display=swap');
+
+        /* Flip das cartas */
         .mem-card { perspective:1000px; cursor:pointer; }
-        .mem-card-inner { position:relative; width:100%; padding-bottom:140%; transition:transform .4s; transform-style:preserve-3d; }
+        .mem-card-inner {
+          position:relative;
+          width:100%; height:100%;
+          transition:transform .35s;
+          transform-style:preserve-3d;
+        }
         .mem-card-inner.flipped { transform:rotateY(180deg); }
-        .mem-card-front,.mem-card-back { position:absolute; width:100%; height:100%; backface-visibility:hidden; border-radius:10px; display:flex; align-items:center; justify-content:center; }
-        .mem-card-front { background:linear-gradient(135deg,#1e1a3f,#2a1f6e); border:1.5px solid #3730a380; transition:border-color .15s; }
+        .mem-card-front,.mem-card-back {
+          position:absolute; width:100%; height:100%;
+          backface-visibility:hidden; border-radius:8px;
+          display:flex; align-items:center; justify-content:center;
+        }
+        .mem-card-front {
+          background:linear-gradient(135deg,#1e1a3f,#2a1f6e);
+          border:1.5px solid #3730a380;
+          transition:border-color .15s;
+        }
         .mem-card-front:hover { border-color:#6c47ff; }
-        .mem-card-back { transform:rotateY(180deg); background:linear-gradient(135deg,#2a1060,#4c2a9e); border:1.5px solid #6c47ff; }
-        .mem-card-back.matched { background:linear-gradient(135deg,#064e3b,#059669); border-color:#10b981; }
+        .mem-card-back {
+          transform:rotateY(180deg);
+          background:linear-gradient(135deg,#2a1060,#4c2a9e);
+          border:1.5px solid #6c47ff;
+        }
+        .mem-card-back.matched {
+          background:linear-gradient(135deg,#064e3b,#059669);
+          border-color:#10b981;
+        }
         .mem-card.disabled { cursor:not-allowed; opacity:.7; }
-        .score-row { display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; scrollbar-width:thin; }
-        .score-card { background:#13112a; border:1px solid #2a2460; border-radius:10px; padding:8px 14px; display:flex; align-items:center; gap:8px; flex-shrink:0; min-width:0; }
+
+        /* Placar horizontal */
+        .score-row {
+          display:flex; gap:6px;
+          overflow-x:auto; padding:0 12px 2px;
+          scrollbar-width:none;
+        }
+        .score-row::-webkit-scrollbar { display:none; }
+        .score-card {
+          background:#13112a; border:1px solid #2a2460; border-radius:8px;
+          padding:5px 10px; display:flex; align-items:center; gap:6px;
+          flex-shrink:0;
+        }
         .score-card.active { border-color:#6c47ff; background:#1e1a3f; }
-        .turn-badge { background:linear-gradient(135deg,#6c47ff,#9f6cff); border-radius:8px; padding:6px 16px; font-size:13px; font-weight:500; white-space:nowrap; }
 
-        /* [CHANGE 3] Badge de desconexão */
-        .disconnected-badge { font-size:10px; color:#f87171; border:1px solid #f8717144; border-radius:20px; padding:1px 6px; margin-left:4px; }
-
-        /* [CHANGE 1] GameBoard responsivo */
-
-        /* Celular em pé (≤480px): forçar 4 colunas mínimas, cartas menores */
-        @media(max-width:480px){
-          .board-grid { gap:4px !important; }
-          .mem-card-back span { font-size:9px !important; }
-          .score-card { padding:6px 10px; }
-          .game-header { flex-wrap:wrap; gap:6px; }
+        /* Badge de turno */
+        .turn-badge {
+          background:linear-gradient(135deg,#6c47ff,#9f6cff);
+          border-radius:6px; padding:4px 12px;
+          font-size:12px; font-weight:500; white-space:nowrap;
         }
 
-        /* Celular deitado (landscape ≤768px) */
+        /* ── Tabuleiro: grid responsivo ──────────────────────────────── */
+        /* Portrait mobile: 4 colunas fixas, cartas quadradas pequenas   */
+        .board-grid {
+          display: grid;
+          grid-template-columns: repeat(${mobileCols}, 1fr);
+          gap: 6px;
+          width: 100%;
+        }
+        .board-card-wrap {
+          aspect-ratio: 3 / 4;
+          width: 100%;
+        }
+
+        /* Tablet portrait (≥ 481px) e landscape: mais colunas */
+        @media(min-width:481px){
+          .board-grid {
+            grid-template-columns: repeat(${room.difficulty === "fácil" ? 4 : room.difficulty === "médio" ? 6 : 7}, 1fr) !important;
+          }
+        }
         @media(max-width:768px) and (orientation:landscape){
-          .game-wrapper { flex-direction:row !important; align-items:flex-start !important; gap:12px !important; }
-          .board-area   { flex:1 1 auto; min-width:0; }
-          .score-area   { flex:0 0 160px; max-width:160px; }
-          .score-row    { flex-direction:column; overflow-x:visible; overflow-y:auto; max-height:calc(100vh - 80px); }
-          .score-card   { width:100%; }
-          .board-grid   { gap:4px !important; }
-          .mem-card-back span { font-size:9px !important; }
+          .board-grid {
+            grid-template-columns: repeat(${room.difficulty === "fácil" ? 4 : room.difficulty === "médio" ? 6 : 7}, 1fr) !important;
+          }
         }
 
-        /* Tablet (481px – 900px, portrait) */
-        @media(min-width:481px) and (max-width:900px) and (orientation:portrait){
-          .board-grid { gap:6px !important; }
-          .mem-card-back span { font-size:11px !important; }
+        /* Texto dentro das cartas: escala com a largura do card */
+        .card-word {
+          font-size: clamp(7px, 2.8vw, 13px);
+          text-align: center;
+          padding: 0 4px;
+          font-weight: 500;
+          line-height: 1.2;
+          word-break: break-word;
+          hyphens: auto;
+        }
+        @media(min-width:481px){
+          .card-word { font-size: clamp(9px, 1.6vw, 13px); }
         }
 
-        @media(min-width:481px) and (max-width:768px){
-          .mem-card-back span { font-size:11px !important; }
+        /* Header compacto */
+        .game-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 8px 12px;
+          border-bottom: 1px solid #1e1a3f;
+          flex-shrink: 0;
+          flex-wrap: wrap;
+          gap: 4px;
+        }
+
+        /* Área do board: ocupa todo o espaço restante */
+        .board-area {
+          flex: 1 1 0;
+          overflow: hidden;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 8px 10px;
+          box-sizing: border-box;
+        }
+        .board-inner {
+          width: 100%;
+          max-width: 100%;
+        }
+
+        /* Placar: linha única compacta */
+        .score-area {
+          flex-shrink: 0;
+          padding: 6px 0 4px;
+          border-bottom: 1px solid #1a1730;
         }
       `}</style>
 
-      {/* Header */}
-      <div className="game-header" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:8 }}>
+      {/* ── HEADER ─────────────────────────────────────────────────── */}
+      <div className="game-header">
         <div>
-          <div style={{ fontFamily:"'Abril Fatface',serif", fontSize:"clamp(14px,3.5vw,22px)", color:"#c4b5fd" }}>Opostos Perfeitos</div>
-          <div style={{ fontSize:11, color:"#6e618f" }}>Sala {roomId} • {cfg.label} • {totalCards} cartas</div>
+          <div style={{ fontFamily:"'Abril Fatface',serif", fontSize:"clamp(13px,3.5vw,20px)", color:"#c4b5fd", lineHeight:1 }}>Opostos Perfeitos</div>
+          <div style={{ fontSize:10, color:"#6e618f", marginTop:1 }}>Sala {roomId} · {cfg.label} · {matchedPairs}/{totalPairs} pares</div>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", justifyContent:"flex-end" }}>
           {isMyTurn
             ? <div className="turn-badge">✦ Sua vez!</div>
-            : <div style={{ fontSize:13, color:"#9f7cff", whiteSpace:"nowrap" }}>Vez de: {currentPlayer?.name}</div>
+            : <div style={{ fontSize:12, color:"#9f7cff", whiteSpace:"nowrap" }}>Vez: {currentPlayer?.name}</div>
           }
-          <div style={{ fontSize:12, color:"#6e618f", whiteSpace:"nowrap" }}>{room.matched.length/2}/{totalCards/2} pares</div>
         </div>
       </div>
 
-      {/* Layout principal: em landscape mobile, lado a lado; senão, empilhado */}
-      <div className="game-wrapper" style={{ display:"flex", flexDirection:"column", gap:12 }}>
-
-        {/* Placar */}
-        <div className="score-area">
-          <div className="score-row">
-            {room.players.map((p,i) => (
-              <div key={p.id} className={`score-card ${i===room.currentPlayerIndex?"active":""}`}>
-                <div style={{ width:8, height:8, borderRadius:"50%", background:PLAYER_COLORS[i%PLAYER_COLORS.length], flexShrink:0 }} />
-                <div style={{ fontSize:12, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", maxWidth:80 }}>{p.name}</div>
-                <div style={{ fontSize:17, fontWeight:600, color:PLAYER_COLORS[i%PLAYER_COLORS.length], marginLeft:2 }}>{p.score}</div>
-              </div>
-            ))}
-          </div>
+      {/* ── PLACAR ─────────────────────────────────────────────────── */}
+      <div className="score-area">
+        <div className="score-row">
+          {room.players.map((p,i) => (
+            <div key={p.id} className={`score-card ${i===room.currentPlayerIndex?"active":""}`}>
+              <div style={{ width:7, height:7, borderRadius:"50%", background:PLAYER_COLORS[i%PLAYER_COLORS.length], flexShrink:0 }} />
+              <div style={{ fontSize:11, maxWidth:60, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</div>
+              <div style={{ fontSize:15, fontWeight:600, color:PLAYER_COLORS[i%PLAYER_COLORS.length] }}>{p.score}</div>
+            </div>
+          ))}
         </div>
+      </div>
 
-        {/* Tabuleiro */}
-        <div className="board-area">
-          <div style={{ maxWidth: maxBoardWidth, margin:"0 auto", width:"100%", display:"flex", flexDirection:"column", gap:8 }}>
-            {rows.map((rowCards, rowIdx) => (
-              <div key={rowIdx} className="board-grid" style={{
-                display:"flex", gap:8,
-                justifyContent: (rowIdx === rows.length - 1 && hasIncompleteRow) ? "center" : "flex-start",
-              }}>
-                {rowCards.map((card) => {
-                  const isFlipped = room.flipped.includes(card.id) || room.matched.includes(card.id);
-                  const isMatched = room.matched.includes(card.id);
-                  const word = decodeWord(card.wordB64);
-                  return (
-                    <div key={card.id}
-                      className={`mem-card ${!isMyTurn || isMatched ? "disabled" : ""}`}
-                      onClick={() => flipCard(card.id)}
-                      style={{ width: CARD_W, flexShrink: 0 }}
-                    >
-                      <div className={`mem-card-inner ${isFlipped ? "flipped" : ""}`}>
-                        <div className="mem-card-front">
-                          <span style={{ fontSize:"clamp(16px,3vw,24px)", opacity:0.25 }}>?</span>
-                        </div>
-                        <div className={`mem-card-back ${isMatched ? "matched" : ""}`}>
-                          <span style={{ fontSize:"clamp(9px,1.8vw,13px)", textAlign:"center", padding:"0 6px", fontWeight:500, color: isMatched?"#d1fae5":"#e9d5ff", lineHeight:1.3 }}>
-                            {isFlipped ? word : ""}
-                          </span>
-                        </div>
+      {/* ── TABULEIRO ──────────────────────────────────────────────── */}
+      <div className="board-area">
+        <div className="board-inner">
+          <div className="board-grid">
+            {room.deck.map((card) => {
+              const isFlipped = room.flipped.includes(card.id) || room.matched.includes(card.id);
+              const isMatched = room.matched.includes(card.id);
+              const word = decodeWord(card.wordB64);
+              return (
+                <div key={card.id} className="board-card-wrap">
+                  <div
+                    className={`mem-card ${!isMyTurn || isMatched ? "disabled" : ""}`}
+                    style={{ width:"100%", height:"100%" }}
+                    onClick={() => flipCard(card.id)}
+                  >
+                    <div className={`mem-card-inner ${isFlipped ? "flipped" : ""}`}>
+                      <div className="mem-card-front">
+                        <span style={{ fontSize:"clamp(14px,4vw,22px)", opacity:0.2 }}>?</span>
+                      </div>
+                      <div className={`mem-card-back ${isMatched ? "matched" : ""}`}>
+                        <span className="card-word" style={{ color: isMatched?"#d1fae5":"#e9d5ff" }}>
+                          {isFlipped ? word : ""}
+                        </span>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
+      </div>
 
-      </div>{/* /game-wrapper */}
-
-      <div style={{ textAlign:"center", marginTop:16, color:"#4a4272", fontSize:12 }}>
-        Encontre pares de adjetivos <strong style={{ color:"#6c47ff" }}>opostos</strong> para marcar pontos
+      {/* ── RODAPÉ MINIMALISTA ─────────────────────────────────────── */}
+      <div style={{ textAlign:"center", padding:"4px 8px 6px", color:"#2e2860", fontSize:10, flexShrink:0 }}>
+        Encontre pares de adjetivos <strong style={{ color:"#4a3a88" }}>opostos</strong>
       </div>
     </div>
   );
@@ -836,6 +924,11 @@ function VictoryScreen({ room, myId, onRestart, onHome }) {
   const isTie = tiedPlayers.length >= 2;
   const myRank = sorted.findIndex(p => p.id === myId) + 1;
   const iAmTied = isTie && tiedPlayers.some(p => p.id === myId);
+
+  // Motivo do encerramento
+  const reason = room?.gameOverReason;
+  const isNotEnoughPlayers = reason === "not_enough_players";
+  const isCompleted = reason === "completed" || !reason;
 
   const podiumHeights = [110, 150, 80];
   const podiumColors  = isTie ? ["#6c7a8a","#8a9bb0","#4a5568"] : ["#c0c0c0","#ffd700","#cd7f32"];
@@ -861,25 +954,19 @@ function VictoryScreen({ room, myId, onRestart, onHome }) {
         .rank-row.tied { border-color:#3a4a5a; background:#0d1220; }
         .tie-banner { background:linear-gradient(135deg,#0a1520,#101c28); border:1px solid #1e2e3a; border-radius:16px; padding:20px 32px; text-align:center; position:relative; z-index:2; }
         .end-content { position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; width:100%; }
-
-        /* [CHANGE 1] Victory responsivo */
+        /* Aviso de partida encerrada por falta de jogadores */
+        .reason-banner { background:#1a0a0a; border:1px solid #f87171; border-radius:12px; padding:12px 20px; color:#f87171; font-size:13px; margin-bottom:20px; text-align:center; max-width:420px; }
         @media(max-width:480px){
-          .podium-wrap { gap:2px !important; }
-          .podium-block { }
           .action-btn { padding:12px 20px; font-size:14px; }
           .win-actions { flex-direction:column; width:100%; max-width:280px; }
           .win-actions .action-btn { width:100%; text-align:center; }
           .tie-banner { padding:14px 16px; }
         }
-        @media(max-width:768px) and (orientation:landscape){
-          .win-podium-row { flex-direction:row !important; }
-          .end-content { padding-top:0 !important; }
-        }
       `}</style>
 
       <div className={isTie ? "bg-tie" : "bg-win"} style={{ position:"fixed", inset:0, zIndex:0 }} />
 
-      {!isTie && Array.from({length:22}).map((_,i) => (
+      {isCompleted && !isTie && Array.from({length:22}).map((_,i) => (
         <div key={i} className="confetti-piece" style={{
           left:`${Math.random()*100}%`,
           background:["#a78bfa","#ffd700","#f87171","#fbbf24","#60a5fa","#f472b6","#34d399"][i%7],
@@ -892,8 +979,15 @@ function VictoryScreen({ room, myId, onRestart, onHome }) {
       ))}
 
       <div className="end-content">
-        <div style={{ textAlign:"center", marginBottom:36 }}>
+        <div style={{ textAlign:"center", marginBottom:24 }}>
           <div style={{ fontSize:12, letterSpacing:4, color:"#4a5070", textTransform:"uppercase", marginBottom:12, fontFamily:"'DM Sans',sans-serif" }}>Fim de Jogo</div>
+
+          {/* Banner de aviso para partida encerrada por jogadores insuficientes */}
+          {isNotEnoughPlayers && (
+            <div className="reason-banner">
+              ⚠️ A partida foi encerrada pois restou apenas 1 jogador.
+            </div>
+          )}
 
           {isTie ? (
             <div className="tie-banner">
@@ -909,13 +1003,13 @@ function VictoryScreen({ room, myId, onRestart, onHome }) {
               <h1 style={{ fontFamily:"'Abril Fatface',serif", fontSize:"clamp(28px,7vw,64px)", margin:0, color:"#c4b5fd" }}>
                 {sorted[0]?.name} Venceu!
               </h1>
-              {myRank === 1 && <div style={{ fontSize:16, color:"#7a6a9a", marginTop:8 }}>Você venceu esta partida.</div>}
+              {myRank === 1 && isCompleted && <div style={{ fontSize:16, color:"#7a6a9a", marginTop:8 }}>Você venceu esta partida.</div>}
             </div>
           )}
         </div>
 
         {/* Pódio */}
-        <div className="podium-wrap" style={{ display:"flex", alignItems:"flex-end", justifyContent:"center", gap:4, marginBottom:36, width:"100%", maxWidth:420 }}>
+        <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"center", gap:4, marginBottom:36, width:"100%", maxWidth:420 }}>
           {[sorted[1], sorted[0], sorted[2]].map((player, vi) => {
             if (!player) return <div key={vi} style={{ flex:1 }}/>;
             const isTiedSlot = isTie && player.score === topScore;
@@ -975,31 +1069,72 @@ function VictoryScreen({ room, myId, onRestart, onHome }) {
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [screen, setScreen]         = useState("landing");
-  const [roomId, setRoomId]         = useState(null);
-  const [isHost, setIsHost]         = useState(false);
-  const [myId]                      = useState(() => `p_${Date.now()}_${Math.random().toString(36).slice(2)}`);
-  const [playerName, setPlayerName] = useState("");
-  const [finalRoom, setFinalRoom]   = useState(null);
+  const [screen, setScreen]           = useState("landing");
+  const [roomId, setRoomId]           = useState(null);
+  const [isHost, setIsHost]           = useState(false);
+  const [myId]                        = useState(() => `p_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+  const [playerName, setPlayerName]   = useState("");
+  const [finalRoom, setFinalRoom]     = useState(null);
+  const [landingError, setLandingError] = useState("");
+
+  // Encerramento forçado (host saiu): vai para a landing com mensagem
+  const handleForcedHome = (msg) => {
+    setLandingError(msg);
+    setScreen("landing");
+  };
+
+  // "Jogar Novamente": volta para o lobby da mesma sala com os mesmos dados
+  // Aplica a mesma lógica de encerramento: se o motivo for host_left ou
+  // not_enough_players, usa handleForcedHome para mostrar a mensagem correta.
+  const handleRestart = () => {
+    const reason = finalRoom?.gameOverReason;
+    if (reason === "host_left") {
+      handleForcedHome("Seu líder quitou a partida.");
+      return;
+    }
+    if (reason === "not_enough_players") {
+      handleForcedHome("A partida foi encerrada por falta de jogadores.");
+      return;
+    }
+    // Partida concluída normalmente → volta ao lobby
+    setScreen("lobby");
+  };
 
   return (
     <>
-      {screen === "landing"  && <LandingPage onCreateRoom={() => { setRoomId(generateRoomId()); setIsHost(true);  setScreen("lobby");   }}
-                                              onJoinRoom={id  => { setRoomId(id);               setIsHost(false); setScreen("lobby");   }}
-                                              onTutorial={() => setScreen("tutorial")} />}
+      {screen === "landing"  && (
+        <LandingPage
+          onCreateRoom={() => { setLandingError(""); setRoomId(generateRoomId()); setIsHost(true);  setScreen("lobby"); }}
+          onJoinRoom={id  => { setLandingError(""); setRoomId(id); setIsHost(false); setScreen("lobby"); }}
+          onTutorial={() => setScreen("tutorial")}
+          errorMessage={landingError}
+        />
+      )}
       {screen === "tutorial" && <Tutorial onFinish={() => setScreen("landing")} />}
-      {screen === "lobby"    && <Lobby roomId={roomId} isHost={isHost}
-                                        persistedMyId={myId}
-                                        persistedName={playerName}
-                                        onNameSet={n => setPlayerName(n)}
-                                        onGameStart={() => setScreen("game")}
-                                        onBack={() => setScreen("landing")} />}
-      {screen === "game"     && <GameBoard roomId={roomId} myId={myId}
-                                            onGameOver={r => { setFinalRoom(r); setScreen("victory"); }} />}
-      {screen === "victory"  && <VictoryScreen room={finalRoom} myId={myId}
-                                                onRestart={() => setScreen("lobby")}
-                                                onHome={() => setScreen("landing")} />}
+      {screen === "lobby"    && (
+        <Lobby
+          roomId={roomId} isHost={isHost}
+          persistedMyId={myId}
+          persistedName={playerName}
+          onNameSet={n => setPlayerName(n)}
+          onGameStart={() => setScreen("game")}
+          onBack={() => setScreen("landing")}
+        />
+      )}
+      {screen === "game"     && (
+        <GameBoard
+          roomId={roomId} myId={myId}
+          onGameOver={r => { setFinalRoom(r); setScreen("victory"); }}
+          onForcedHome={handleForcedHome}
+        />
+      )}
+      {screen === "victory"  && (
+        <VictoryScreen
+          room={finalRoom} myId={myId}
+          onRestart={handleRestart}
+          onHome={() => { setLandingError(""); setScreen("landing"); }}
+        />
+      )}
     </>
   );
 }
-
