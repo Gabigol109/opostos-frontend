@@ -708,16 +708,15 @@ function GameBoard({ roomId, myId, onGameOver, onForcedHome }) {
 
   return (
     <div style={{
-      // Ocupa exatamente a viewport sem scroll vertical em portrait mobile
       minHeight: "100dvh",
-      height: "100dvh",
       background:"#0a0a14",
       color:"#f0eefc",
       fontFamily:"'DM Sans',sans-serif",
       display: "flex",
       flexDirection: "column",
-      overflow: "hidden",
       boxSizing: "border-box",
+      // header e placar ficam fixos no topo; board-area rola
+      position: "relative",
     }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Abril+Fatface&family=DM+Sans:wght@300;400;500&display=swap');
@@ -825,16 +824,23 @@ function GameBoard({ roomId, myId, onGameOver, onForcedHome }) {
           gap: 4px;
         }
 
-        /* Área do board: ocupa todo o espaço restante */
+        /* Área do board: scroll vertical para ver todas as cartas */
         .board-area {
-          flex: 1 1 0;
-          overflow: hidden;
+          flex: 1 1 auto;
+          overflow-y: auto;
+          overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           justify-content: center;
-          padding: 8px 10px;
+          padding: 10px 10px 16px;
           box-sizing: border-box;
+          scrollbar-width: thin;
+          scrollbar-color: #2a2460 transparent;
         }
+        .board-area::-webkit-scrollbar { width: 4px; }
+        .board-area::-webkit-scrollbar-track { background: transparent; }
+        .board-area::-webkit-scrollbar-thumb { background: #2a2460; border-radius: 4px; }
         .board-inner {
           width: 100%;
           max-width: 100%;
